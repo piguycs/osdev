@@ -1,29 +1,52 @@
-const uart = @import("uart.zig");
-const std = @import("std");
+const println = @import("writer.zig").println;
 
-// Here we set up a printf-like writer from the standard library by providing
-// a way to output via the UART.
-const Writer = std.io.Writer(u32, error{}, uart_put_str);
-const uart_writer = Writer{ .context = 0 };
+const motd =
+    \\
+    \\Welcome to $(cat name.txt)
+;
 
-fn uart_put_str(_: u32, str: []const u8) !usize {
-    for (str) |ch| {
-        uart.put_char(ch);
+extern var _bss: [0]u8;
+extern var _bss_end: [0]u8;
+extern var _stack: [0]u8;
+
+pub fn memset(buf: [*]u8, c: u8, n: usize) [*]u8 {
+    var p: [*]u8 = buf;
+    for (0..n) |i| {
+        p[i] = c;
     }
-    return str.len;
+    return buf;
 }
 
-pub fn println(comptime fmt: []const u8, args: anytype) void {
-    uart_writer.print(fmt ++ "\n", args) catch {};
-}
+export fn handle_trap() noreturn {
+    const scause = asm volatile (
+        \\csrr a0, scause
+        : [a0] "={a0}" (-> u32),
+    );
 
-export fn trap() noreturn {
+    const stval = asm volatile (
+        \\csrr a0, stval
+        : [a0] "={a0}" (-> u32),
+    );
+
+    const sepc = asm volatile (
+        \\csrr a0, sepc
+        : [a0] "={a0}" (-> u32),
+    );
+
+    println("PANIC scause={?} stval={?} sepc={?}", .{ scause, stval, sepc });
+
     while (true) {}
 }
 
-export fn kmain() void {
-    uart.init();
-    println("HELLO WORLD", .{});
+export fn kmain() noreturn {
+    println(motd, .{});
 
+    const bss_start = @intFromPtr(&_bss);
+    const bss_end = @intFromPtr(&_bss_end);
+    const bss_size: usize = @intCast(bss_end - bss_start);
+
+    _ = memset(&_bss, 0, bss_size);
+
+    asm volatile ("unimp");
     while (true) {}
 }

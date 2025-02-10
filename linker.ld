@@ -1,40 +1,34 @@
-OUTPUT_ARCH( "riscv" )
-ENTRY( _start )
+ENTRY(_start)
 
-MEMORY { ram  (wxa) : ORIGIN = 0x80000000, LENGTH = 128M }
-PHDRS { text PT_LOAD; data PT_LOAD; bss PT_LOAD; }
+/*
+* _stack, _bss, _bss_end need to be declared and initialised in kmain
+*/
 
 SECTIONS {
-  .text : {
-    PROVIDE(_text_start = .);
-    *(.text.init) *(.text .text.*)
-    PROVIDE(_text_end = .);
-  } >ram AT>ram :text
+    /* place our code starting from here */
+    . = 0x80200000;
 
-  PROVIDE(_global_pointer = .);
+    /* .text.init is the first section */
+    .text : {
+        KEEP(*(.text.boot));
+        *(.text .text.*);
+    }
 
-  .rodata : {
-    PROVIDE(_rodata_start = .);
-    *(.rodata .rodata.*)
-    PROVIDE(_rodata_end = .);
-  } >ram AT>ram :text
+    .rodata : ALIGN(4) {
+        *(.rodata .rodata.*);
+    }
 
-  .data : {
-    . = ALIGN(4096);
-    PROVIDE(_data_start = .);
-    *(.sdata .sdata.*) *(.data .data.*)
-    PROVIDE(_data_end = .);
-  } >ram AT>ram :data
+    .data : ALIGN(4) {
+        *(.data .data.*);
+    }
 
-  .bss : {
-    PROVIDE(_bss_start = .);
-    *(.sbss .sbss.*) *(.bss .bss.*)
-    PROVIDE(_bss_end = .);
-  } >ram AT>ram :bss
+    .bss : ALIGN(4) {
+        _bss = .;
+        *(.bss .bss.* .sbss .sbss.*);
+        _bss_end = .;
+    }
 
-  PROVIDE(_memory_start = ORIGIN(ram));
-  PROVIDE(_stack = _bss_end + 0x80000);
-  PROVIDE(_memory_end = ORIGIN(ram) + LENGTH(ram));
-  PROVIDE(_heap_start = _stack);
-  PROVIDE(_heap_size = _memory_end - _heap_start);
+    . = ALIGN(4);
+    . += 128 * 1024; /* 128KB */
+    _stack = .;
 }

@@ -1,5 +1,20 @@
 const std = @import("std");
 
+const QEMU_OPTS = .{
+    "qemu-system-riscv64", "-nographic",
+    "-machine",            "virt",
+    "-bios",               "default",
+    "-kernel",             "zig-out/bin/kernel",
+};
+
+const QEMU_OPTS_DBG = .{
+    "qemu-system-riscv64", "-nographic",
+    "-s",                  "-S",
+    "-machine",            "virt",
+    "-bios",               "default",
+    "-kernel",             "zig-out/bin/kernel",
+};
+
 pub fn build(b: *std.Build) void {
     const target_conf = .{
         .cpu_arch = .riscv64,
@@ -19,7 +34,7 @@ pub fn build(b: *std.Build) void {
     });
 
     kernel.setLinkerScriptPath(b.path("linker.ld"));
-    kernel.addAssemblyFile(b.path("boot.S"));
+    kernel.addAssemblyFile(b.path("src/boot.S"));
 
     b.installArtifact(kernel);
 
@@ -28,21 +43,19 @@ pub fn build(b: *std.Build) void {
 }
 
 fn runWithQemuCmd(b: *std.Build) void {
-    const run_cmd = b.addSystemCommand(&.{
-        "qemu-system-riscv64",
-        "-machine",
-        "virt",
-        "-bios",
-        "none",
-        "-kernel",
-        "zig-out/bin/kernel",
-        "-nographic",
-    });
+    const run_cmd = b.addSystemCommand(&QEMU_OPTS);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_cmd.addArgs(args);
 
-    const step = b.step("run", "QEMU + Kernel");
+    const step = b.step("run", "Run kernel with QEMU");
     step.dependOn(&run_cmd.step);
+
+    const run_dbg_cmd = b.addSystemCommand(&QEMU_OPTS_DBG);
+    run_dbg_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| run_dbg_cmd.addArgs(args);
+
+    const step_dbg = b.step("run-dbg", "Run kernel with QEMU in debug mode (gdb server on :1234)");
+    step_dbg.dependOn(&run_dbg_cmd.step);
 }
 
 fn objdumpCmd(b: *std.Build) void {
