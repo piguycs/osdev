@@ -1,11 +1,9 @@
+OUTPUT_ARCH("riscv")
 ENTRY(_start)
-
-/*
-* _stack, _bss, _bss_end need to be declared and initialised in kmain
-*/
 
 SECTIONS {
     /* place our code starting from here */
+    /* OpenSBI does not load our kernel on any value below this */
     . = 0x80200000;
 
     /* .text.init is the first section */
@@ -14,21 +12,21 @@ SECTIONS {
         *(.text .text.*);
     }
 
-    .rodata : ALIGN(4) {
+    .rodata : ALIGN(16) {
         *(.rodata .rodata.*);
     }
 
-    .data : ALIGN(4) {
+    .data : ALIGN(16) {
         *(.data .data.*);
     }
 
-    .bss : ALIGN(4) {
+    .bss : ALIGN(16) {
         _bss = .;
         *(.bss .bss.* .sbss .sbss.*);
         _bss_end = .;
     }
 
-    . = ALIGN(4);
+    . = ALIGN(16);
     . += 128 * 1024; /* 128KB */
     _stack = .;
 }
