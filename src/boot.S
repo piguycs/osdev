@@ -9,6 +9,3 @@ _start:
 
     # jump to the kernel
     j kmain
-
-trap:
-    call handle_trap
