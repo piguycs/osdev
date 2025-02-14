@@ -1,4 +1,13 @@
-pub fn ecall(ext: i32, fid: i32, arg0: u64, arg1: u64, arg2: u64, arg3: u64, arg4: u64, arg5: u64) sbiret {
+fn ecall(
+    ext: i32,
+    fid: i32,
+    arg0: u64,
+    arg1: u64,
+    arg2: u64,
+    arg3: u64,
+    arg4: u64,
+    arg5: u64,
+) sbiret {
     return asm volatile (
         \\ecall
         : [ret] "={a0},{a1}" (-> sbiret),
@@ -13,44 +22,40 @@ pub fn ecall(ext: i32, fid: i32, arg0: u64, arg1: u64, arg2: u64, arg3: u64, arg
     );
 }
 
-pub fn csrr(comptime reg: []const u8) u32 {
-    const rett = asm volatile ("csrr %[ret], " ++ reg
-        : [ret] "={a0}" (-> u32),
-    );
+pub const DebugConsoleExt = .{
+    .eid = 0x4442434E,
+    .write = 0x0,
+};
 
-    return rett;
+pub fn console_write(str: []const u8) sbiret {
+    return ecall(
+        DebugConsoleExt.eid,
+        DebugConsoleExt.write,
+        str.len,
+        @intFromPtr(str.ptr),
+        0,
+        0,
+        0,
+        0,
+    );
 }
 
 // =========== TYPES ===========
 
 pub const SbiError = enum(i64) {
-    /// Completed successfully
     Success = 0,
-    /// Failed
     ErrFailed = -1,
-    /// Not supported
     NotSupported = -2,
-    /// Invalid parameter(s)
     InvalidParam = -3,
-    /// Denied or not allowed
     ErrDenied = -4,
-    /// Invalid address(s)
     InvalidAddress = -5,
-    /// Already available
     AlreadyAvailable = -6,
-    /// Already started
     AlreadyStarted = -7,
-    /// Already stopped
     AlreadyStopped = -8,
-    /// Shared memory not available
     NoShmem = -9,
-    /// Invalid state
     ErrInvalidState = -10,
-    /// Bad (or invalid) range
     ErrBadRange = -11,
-    /// Failed due to timeout
     ErrTimeout = -12,
-    /// Input/Output error
     ErrIo = -13,
 };
 

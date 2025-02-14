@@ -1,15 +1,16 @@
 const println = @import("writer.zig").println;
-const std = @import("std");
 const sbi = @import("sbi.zig");
+const riscv = @import("riscv.zig");
 
 const motd = "Welcome to $(cat name.txt)";
 
 export fn trap() noreturn {
-    const scause = sbi.csrr("scause");
-    const svalue = sbi.csrr("stval");
-    const sepc = sbi.csrr("sepc");
+    const scause = riscv.csrr("scause");
+    const svalue = riscv.csrr("stval");
+    const sepc = riscv.csrr("sepc");
 
-    println("trap card activated scause={x} svalue={x} sepc={x}", .{ scause, svalue, sepc });
+    println("exception: scause={x} svalue={x} sepc={x}", .{ scause, svalue, sepc });
+    println("(TIP) run: llvm-addr2line -e zig-out/bin/kernel {x}", .{sepc});
 
     while (true) {}
 }
