@@ -5,15 +5,13 @@ const QEMU_OPTS = .{
     "-machine",            "virt",
     "-bios",               "default",
     "-kernel",             "zig-out/bin/kernel",
+    // serial output + console gets stored in a logfile
+    "-chardev",            "stdio,id=char0,mux=on,logfile=serial.log,signal=on",
+    "-serial",             "chardev:char0",
+    "-mon",                "chardev=char0",
 };
 
-const QEMU_OPTS_DBG = .{
-    "qemu-system-riscv64", "-nographic",
-    "-s",                  "-S",
-    "-machine",            "virt",
-    "-bios",               "default",
-    "-kernel",             "zig-out/bin/kernel",
-};
+const QEMU_DBG = .{ "-s", "-S" };
 
 pub fn build(b: *std.Build) void {
     const target_conf = .{
@@ -50,7 +48,7 @@ fn runWithQemuCmd(b: *std.Build) void {
     const step = b.step("run", "Run kernel with QEMU");
     step.dependOn(&run_cmd.step);
 
-    const run_dbg_cmd = b.addSystemCommand(&QEMU_OPTS_DBG);
+    const run_dbg_cmd = b.addSystemCommand(&(QEMU_OPTS ++ QEMU_DBG));
     run_dbg_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_dbg_cmd.addArgs(args);
 
