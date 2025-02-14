@@ -1,43 +1,46 @@
-fn ecall(
+const EcallParams = struct {
     ext: i32,
     fid: i32,
-    arg0: u64,
-    arg1: u64,
-    arg2: u64,
-    arg3: u64,
-    arg4: u64,
-    arg5: u64,
-) sbiret {
+    arg0: u64 = 0,
+    arg1: u64 = 0,
+    arg2: u64 = 0,
+    arg3: u64 = 0,
+    arg4: u64 = 0,
+    arg5: u64 = 0,
+};
+
+fn ecall(params: EcallParams) sbiret {
     return asm volatile (
         \\ecall
         : [ret] "={a0},{a1}" (-> sbiret),
-        : [a0] "{a0}" (arg0),
-          [a1] "{a1}" (arg1),
-          [a2] "{a2}" (arg2),
-          [a3] "{a3}" (arg3),
-          [a4] "{a4}" (arg4),
-          [a5] "{a5}" (arg5),
-          [a6] "{a6}" (fid),
-          [a7] "{a7}" (ext),
+        : [a0] "{a0}" (params.arg0),
+          [a1] "{a1}" (params.arg1),
+          [a2] "{a2}" (params.arg2),
+          [a3] "{a3}" (params.arg3),
+          [a4] "{a4}" (params.arg4),
+          [a5] "{a5}" (params.arg5),
+          [a6] "{a6}" (params.fid),
+          [a7] "{a7}" (params.ext),
     );
 }
 
-pub const DebugConsoleExt = .{
-    .eid = 0x4442434E,
-    .write = 0x0,
+pub const DebugConsoleExt = struct {
+    const eid = 0x4442434E;
+    const fid_write = 0x0;
+
+    pub fn write(str: []const u8) sbiret {
+        const strptr = @intFromPtr(str.ptr);
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_write,
+            .arg0 = str.len,
+            .arg1 = strptr,
+        });
+    }
 };
 
-pub fn console_write(str: []const u8) sbiret {
-    return ecall(
-        DebugConsoleExt.eid,
-        DebugConsoleExt.write,
-        str.len,
-        @intFromPtr(str.ptr),
-        0,
-        0,
-        0,
-        0,
-    );
+pub fn support(_: anytype) bool {
+    return true;
 }
 
 // =========== TYPES ===========

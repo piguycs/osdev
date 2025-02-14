@@ -3,10 +3,11 @@ const std = @import("std");
 const QEMU_OPTS = .{
     "qemu-system-riscv64", "-nographic",
     "-machine",            "virt",
+    "-smp",                "2",
     "-bios",               "default",
     "-kernel",             "zig-out/bin/kernel",
     // serial output + console gets stored in a logfile
-    "-chardev",            "stdio,id=char0,mux=on,logfile=serial.log,signal=on",
+    "-chardev",            "stdio,id=char0,mux=on,logfile=zig-out/serial.log,signal=on",
     "-serial",             "chardev:char0",
     "-mon",                "chardev=char0",
 };
@@ -58,7 +59,7 @@ fn runWithQemuCmd(b: *std.Build) void {
 
 fn objdumpCmd(b: *std.Build) void {
     const objdump_cmd = b.addSystemCommand(&.{
-        "riscv64-linux-gnu-objdump",
+        "llvm-objdump",
         "-d",
         "zig-out/bin/kernel",
     });
