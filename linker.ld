@@ -29,4 +29,9 @@ SECTIONS {
     . = ALIGN(16);
     . += 128 * 1024; /* 128KB */
     _stack = .;
+
+    . = ALIGN(4096);
+    PROVIDE(_mem_start = .);
+    . += 128 * 4096;
+    PROVIDE(_mem_end = .);
 }

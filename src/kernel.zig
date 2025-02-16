@@ -1,6 +1,7 @@
 const println = @import("writer.zig").println;
 const sbi = @import("sbi.zig");
 const riscv = @import("riscv.zig");
+const mem = @import("mem.zig");
 
 const motd = "Welcome to $(cat name.txt)";
 
@@ -19,7 +20,12 @@ export fn kmain() noreturn {
     println("", .{});
     println(motd, .{});
 
-    asm volatile ("unimp");
+    // init stuff
+    mem.init();
+
+    const page = mem.kalloc(1).?;
+
+    _ = page;
 
     while (true) {}
 }

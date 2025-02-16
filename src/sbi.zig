@@ -1,6 +1,8 @@
+const std = @import("std");
+
 const EcallParams = struct {
-    ext: i32,
-    fid: i32,
+    ext: u64,
+    fid: u64,
     arg0: u64 = 0,
     arg1: u64 = 0,
     arg2: u64 = 0,
@@ -24,9 +26,31 @@ fn ecall(params: EcallParams) sbiret {
     );
 }
 
+pub const BaseExt = struct {
+    const eid = 0x10;
+    const fid_impl_id = 0x1;
+    const fid_probe_ext = 0x3;
+
+    pub fn impl_id() sbiret {
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_impl_id,
+        });
+    }
+
+    pub fn probe_ext(probe_eid: u64) sbiret {
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_probe_ext,
+            .arg0 = probe_eid,
+        });
+    }
+};
+
 pub const DebugConsoleExt = struct {
     const eid = 0x4442434E;
     const fid_write = 0x0;
+    const fid_read = 0x1;
 
     pub fn write(str: []const u8) sbiret {
         const strptr = @intFromPtr(str.ptr);
@@ -37,10 +61,20 @@ pub const DebugConsoleExt = struct {
             .arg1 = strptr,
         });
     }
+
+    pub fn read(str: []const u8) sbiret {
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_read,
+            .arg0 = str.len,
+            .arg1 = @intFromPtr(str.ptr),
+        });
+    }
 };
 
-pub fn support(_: anytype) bool {
-    return true;
+pub fn support(comptime ext: type) bool {
+    const ret = BaseExt.probe_ext(ext.eid);
+    return ret.value == 1;
 }
 
 // =========== TYPES ===========
