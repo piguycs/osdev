@@ -1,4 +1,4 @@
-const sbi = @import("sbi.zig");
+const sbi = @import("riscv/sbi.zig");
 const std = @import("std");
 
 const Writer = std.io.GenericWriter(u32, error{}, put_str);

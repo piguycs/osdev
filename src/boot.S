@@ -9,3 +9,6 @@ _start:
 
     # jump to the kernel
     j kmain
+
+_spin:
+    j .

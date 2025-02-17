@@ -13,3 +13,9 @@ pub inline fn csrw(comptime reg: []const u8, value: u64) void {
         : "{a0}"
     );
 }
+
+pub fn hartid() u64 {
+    return asm volatile ("nop"
+        : [ret] "={a0}" (-> u64),
+    );
+}

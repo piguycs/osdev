@@ -20,7 +20,7 @@ pub fn init() void {
     kmem.next_ptr = @intFromPtr(&_mem_start);
 }
 
-pub fn kalloc(pages: usize) ?[*]u8 {
+pub fn kalloc(pages: usize) ?[]u8 {
     if (pages <= 0) return null;
 
     const addr = kmem.next_ptr.?;
@@ -35,11 +35,8 @@ pub fn kalloc(pages: usize) ?[*]u8 {
 
     const curr_mem = @as([*]u8, @ptrFromInt(addr));
 
-    const num_elems = mem_size / @sizeOf(u8);
+    const memory_slice = curr_mem[0..mem_size];
+    @memset(memory_slice, 0);
 
-    for (0..num_elems) |i| {
-        curr_mem[i] = 0;
-    }
-
-    return curr_mem;
+    return memory_slice;
 }

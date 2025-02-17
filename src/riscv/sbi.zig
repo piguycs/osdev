@@ -1,5 +1,3 @@
-const std = @import("std");
-
 const EcallParams = struct {
     ext: u64,
     fid: u64,
@@ -68,6 +66,29 @@ pub const DebugConsoleExt = struct {
             .fid = fid_read,
             .arg0 = str.len,
             .arg1 = @intFromPtr(str.ptr),
+        });
+    }
+};
+
+pub const HartStateManagement = struct {
+    const eid = 0x48534D;
+    const fid_hart_start = 0x0;
+    const fid_hart_get_status = 0x2;
+
+    pub fn hart_start(id: u64, addr: u64) sbiret {
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_hart_start,
+            .arg0 = id,
+            .arg1 = addr,
+        });
+    }
+
+    pub fn hart_get_status(id: u64) sbiret {
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_hart_get_status,
+            .arg0 = id,
         });
     }
 };

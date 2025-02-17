@@ -1,6 +1,6 @@
 const println = @import("writer.zig").println;
-const sbi = @import("sbi.zig");
-const riscv = @import("riscv.zig");
+const sbi = @import("riscv/sbi.zig");
+const riscv = @import("riscv/riscv.zig");
 const mem = @import("mem.zig");
 
 const motd = "Welcome to $(cat name.txt)";
@@ -21,11 +21,10 @@ export fn kmain() noreturn {
     println(motd, .{});
 
     // init stuff
-    mem.init();
+    // mem.init();
 
-    const page = mem.kalloc(1).?;
-
-    _ = page;
+    // const page = mem.kalloc(1).?;
+    // println("mem: 0x{x} size: {any} pages", .{ @intFromPtr(page.ptr), page.len / mem.PAGE_SIZE });
 
     while (true) {}
 }
