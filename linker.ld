@@ -26,12 +26,13 @@ SECTIONS {
         _bss_end = .;
     }
 
-    . = ALIGN(16);
-    . += 128 * 1024; /* 128KB */
     _stack = .;
+    . = ALIGN(16);
+    . += 128 * 4 * 1024; /* 512KB: each hart gets 4096KB */
+    _stack_end = .;
 
     . = ALIGN(4096);
     PROVIDE(_mem_start = .);
-    . += 128 * 4096;
+    . += 128 * 4 * 1024; /* 512KB */
     PROVIDE(_mem_end = .);
 }

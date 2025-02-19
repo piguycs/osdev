@@ -3,8 +3,11 @@
 .global _second_start
 _start:
     la sp, _stack
+    # 4096KB of stack per thread
     li a1, 1024*4
-    addi a0, a0, 2
+    # a thread is always started with hartid in a0 (when using OpenSBI)
+    # we add one to it, as we dont wanna multiply by 0
+    addi a0, a0, 1
     mul a1, a1, a0
     add sp, sp, a1
 
