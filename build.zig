@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const QEMU_OPTS = .{
+pub const QEMU_OPTS = .{
     "qemu-system-riscv64", "-nographic",
     "-machine",            "virt",
     "-smp",                "4",
@@ -12,7 +12,7 @@ const QEMU_OPTS = .{
     "-mon",                "chardev=char0",
 };
 
-const QEMU_DBG = .{ "-s", "-S" };
+pub const QEMU_DBG = QEMU_OPTS ++ .{ "-s", "-S" };
 
 pub fn build(b: *std.Build) void {
     const target_conf = .{
@@ -33,6 +33,7 @@ pub fn build(b: *std.Build) void {
     });
 
     kernel.setLinkerScriptPath(b.path("linker.ld"));
+
     kernel.addAssemblyFile(b.path("src/boot.S"));
 
     b.installArtifact(kernel);
@@ -49,7 +50,7 @@ fn runWithQemuCmd(b: *std.Build) void {
     const step = b.step("run", "Run kernel with QEMU");
     step.dependOn(&run_cmd.step);
 
-    const run_dbg_cmd = b.addSystemCommand(&(QEMU_OPTS ++ QEMU_DBG));
+    const run_dbg_cmd = b.addSystemCommand(&QEMU_DBG);
     run_dbg_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_dbg_cmd.addArgs(args);
 

@@ -1,7 +1,6 @@
 const println = @import("writer.zig").println;
-const sbi = @import("riscv/sbi.zig");
 const riscv = @import("riscv/riscv.zig");
-const mem = @import("mem.zig");
+const sbi = @import("riscv/sbi.zig");
 
 const motd = "Welcome to $(cat name.txt)";
 
@@ -16,15 +15,25 @@ export fn trap() noreturn {
     while (true) {}
 }
 
-export fn kmain() noreturn {
+extern fn _second_start() void;
+
+// hartid is set in a0, which is used for the first parameter of functions
+export fn kmain(hartid: u64) noreturn {
     println("", .{});
     println(motd, .{});
 
-    // init stuff
-    // mem.init();
+    for (0..4) |id| {
+        if (id == hartid) continue;
 
-    // const page = mem.kalloc(1).?;
-    // println("mem: 0x{x} size: {any} pages", .{ @intFromPtr(page.ptr), page.len / mem.PAGE_SIZE });
+        const ret = sbi.HartStateManagement.hart_start(id, @intFromPtr(&_second_start));
+        println("RET#{any}: {any}", .{ id, ret });
+    }
 
     while (true) {}
+}
+
+export fn sec() noreturn {
+    while (true) {
+        asm volatile ("wfi");
+    }
 }
