@@ -21,17 +21,15 @@ export fn kmain(hartid: u64) noreturn {
     println(motd, .{});
 
     for (0..4) |id| {
-        if (id == hartid) continue;
-        _ = sbi.HartStateManagement.hart_start(id, null);
+        if (id != hartid - 1) {
+            const ret = sbi.HartStateManagement.hart_start(id, null);
+            println("RET#{any}: {any}", .{ id, ret });
+        }
     }
 
     while (true) {}
 }
 
-export fn secondary(hartid: u64) noreturn {
-    println("hart#{any}", .{hartid});
-
-    while (true) {
-        asm volatile ("wfi");
-    }
+export fn secondary(_: u64) noreturn {
+    while (true) {}
 }
