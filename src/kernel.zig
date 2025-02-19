@@ -15,8 +15,6 @@ export fn trap() noreturn {
     while (true) {}
 }
 
-extern fn _second_start() void;
-
 // hartid is set in a0, which is used for the first parameter of functions
 export fn kmain(hartid: u64) noreturn {
     println("", .{});
@@ -24,15 +22,15 @@ export fn kmain(hartid: u64) noreturn {
 
     for (0..4) |id| {
         if (id == hartid) continue;
-
-        const ret = sbi.HartStateManagement.hart_start(id, @intFromPtr(&_second_start));
-        println("RET#{any}: {any}", .{ id, ret });
+        _ = sbi.HartStateManagement.hart_start(id, null);
     }
 
     while (true) {}
 }
 
-export fn sec() noreturn {
+export fn secondary(hartid: u64) noreturn {
+    println("hart#{any}", .{hartid});
+
     while (true) {
         asm volatile ("wfi");
     }

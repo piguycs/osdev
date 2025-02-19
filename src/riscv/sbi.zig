@@ -75,12 +75,15 @@ pub const HartStateManagement = struct {
     const fid_hart_start = 0x0;
     const fid_hart_get_status = 0x2;
 
-    pub fn hart_start(id: u64, addr: u64) sbiret {
+    extern fn _second_start() void;
+
+    /// addr can be null, uses _second_start as a default
+    pub fn hart_start(id: u64, addr: ?u64) sbiret {
         return ecall(.{
             .ext = eid,
             .fid = fid_hart_start,
             .arg0 = id,
-            .arg1 = addr,
+            .arg1 = addr orelse @intFromPtr(&_second_start),
         });
     }
 
