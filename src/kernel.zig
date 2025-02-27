@@ -1,6 +1,7 @@
 const println = @import("writer.zig").println;
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
+const mem = @import("mem.zig");
 
 const motd = "Welcome to $(cat name.txt)";
 
@@ -17,15 +18,12 @@ export fn trap() noreturn {
 
 // hartid is set in a0, which is used for the first parameter of functions
 export fn kmain(hartid: u64) noreturn {
+    _ = hartid;
+
     println("", .{});
     println(motd, .{});
 
-    for (0..4) |id| {
-        if (id != hartid - 1) {
-            const ret = sbi.HartStateManagement.hart_start(id, null);
-            println("RET#{any}: {any}", .{ id, ret });
-        }
-    }
+    mem.init();
 
     while (true) {}
 }

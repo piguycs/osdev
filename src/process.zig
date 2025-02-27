@@ -7,8 +7,6 @@ pub const Process = struct {
     stack: [8192]u8,
 };
 
-pub fn spawn(pc: u64) void {}
-
 pub fn switchContext(prev_sp: u64, next_sp: u64) void {
     asm volatile (
         \\ addi sp, sp, -13 * 4
