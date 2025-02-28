@@ -1,22 +1,24 @@
 .section .text.boot
 .global _start
-.global _second_start
+
 _start:
     jal _setup_stack
-    jal _setup_trap
+
+    la t0, _trap
+    csrw stvec, t0
 
     j kmain
 
+.section .text.other
+.global _second_start
+
 _second_start:
     jal _setup_stack
-    jal _setup_trap
     
-    j secondary
-
-_setup_trap:
     la t0, _trap
     csrw stvec, t0
-    ret
+
+    j secondary
 
 # TODO: save the registers to memory and re-populate them
 _trap:
