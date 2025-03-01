@@ -9,7 +9,7 @@ _start:
 
     # when we call start, two parameters are passed
     # - a0: hartid - set by OpenSBI
-    # - a1: dtb pointer - set by OpenSBI (might be useful later)
+    # - a1: fdt header ptr - set by OpenSBI (might be useful later)
     call start
 
 # stack0 -> | 0 | 1 | <- stack pointer

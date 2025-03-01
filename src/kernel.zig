@@ -1,22 +1,26 @@
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
+const fdt = @import("riscv/fdt.zig");
 const println = @import("writer.zig").println;
 
 ///maximum supported CPU cores
 const NCPU = 4;
 pub export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 
-// TODO: find out the specification for this and log it for debug reasons
-const dtb = struct {};
-var dtb_address: ?*dtb = null;
+var fdt_header_addr: ?*fdt.Header = null;
 
 // initialisation of hardware threads. this section is NOT unique per thread
-// TODO: I need some way to distinguish if this is the main hart or not
-export fn start(hartid: u64, dtb_ptr: *dtb) void {
+export fn start(hartid: u64, dtb_ptr: u64) void {
     riscv.set_sie_all();
 
-    if (dtb_address == null) {
-        dtb_address = dtb_ptr;
+    if (fdt_header_addr == null) {
+        fdt_header_addr = @ptrFromInt(dtb_ptr);
+
+        if (@byteSwap(fdt_header_addr.?.magic) != 0xd00dfeed) {
+            println("PANIC: fdt magic number does not match", .{});
+            asm volatile ("j .");
+        }
+
         println("INFO: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
