@@ -9,6 +9,8 @@ const EcallParams = struct {
     arg5: u64 = 0,
 };
 
+///Using a struct EcallParams instead of just passing function arguments as this
+///is much easier to read.
 fn ecall(params: EcallParams) sbiret {
     return asm volatile (
         \\ecall
@@ -75,7 +77,7 @@ pub const HartStateManagement = struct {
     const fid_hart_start = 0x0;
     const fid_hart_get_status = 0x2;
 
-    extern fn _second_start() void;
+    extern fn _start() void;
 
     /// addr can be null, uses _second_start as a default
     pub fn hart_start(id: u64, addr: ?u64) sbiret {
@@ -83,7 +85,7 @@ pub const HartStateManagement = struct {
             .ext = eid,
             .fid = fid_hart_start,
             .arg0 = id,
-            .arg1 = addr orelse @intFromPtr(&_second_start),
+            .arg1 = addr orelse @intFromPtr(&_start),
         });
     }
 
@@ -120,6 +122,9 @@ pub const SbiError = enum(i64) {
     ErrIo = -13,
 };
 
+// TODO: mark the error case for sbi ret as a zig error type. this will make
+// APIs convey their failure cases with the type system instead of relying on
+// documentation and prayers
 pub const sbiret = packed struct {
     errno: SbiError,
     value: u64,

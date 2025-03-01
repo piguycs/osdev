@@ -21,18 +21,8 @@ SECTIONS {
     }
 
     .bss : ALIGN(16) {
-        _bss = .;
         *(.bss .bss.* .sbss .sbss.*);
-        _bss_end = .;
     }
 
-    _stack_start = .;
-    . = ALIGN(16);
-    . += 128 * 4 * 1024; /* 512KB: each hart gets 4096KB */
-    _stack_end = .;
-
-    . = ALIGN(4096);
-    PROVIDE(_mem_start = .);
-    . += 128 * 4 * 1024; /* 512KB */
-    PROVIDE(_mem_end = .);
+    PROVIDE(end = .);
 }

@@ -1,21 +1,23 @@
-pub inline fn csrr(comptime reg: []const u8) u64 {
-    const rett = asm volatile ("csrr %[ret], " ++ reg
-        : [ret] "={a0}" (-> u32),
-    );
+// supervisor interrupt flags
+// documentation for these values is on section 10.1 of risc-v priv isa pdf
+const SIE_SEIE = 1 << 9; // external
+const SIE_STIE = 1 << 5; // timer
+const SIE_SSIE = 1 << 1; // software
 
-    return rett;
+pub inline fn csrr(comptime reg: []const u8) u64 {
+    return asm volatile ("csrr %[ret], " ++ reg
+        : [ret] "={a0}" (-> u64),
+    );
 }
 
 pub inline fn csrw(comptime reg: []const u8, value: u64) void {
-    asm volatile ("csrr %[val], " ++ reg
+    asm volatile ("csrw " ++ reg ++ ", %[val]"
         :
-        : [val] "{a0}" (value),
-        : "{a0}"
+        : [val] "{t0}" (value),
     );
 }
 
-pub fn hartid() u64 {
-    return asm volatile ("nop"
-        : [ret] "={a0}" (-> u64),
-    );
+///sets supervisor mode to handle external, timer and software interrupts
+pub inline fn set_sie_all() void {
+    csrw("sie", SIE_SEIE | SIE_STIE | SIE_SSIE);
 }

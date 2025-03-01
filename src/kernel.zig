@@ -1,33 +1,48 @@
-const println = @import("writer.zig").println;
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
-const mem = @import("mem.zig");
+const println = @import("writer.zig").println;
 
-const motd = "Welcome to $(cat name.txt)";
+///maximum supported CPU cores
+const NCPU = 4;
+pub export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 
-export fn trap() noreturn {
-    const scause = riscv.csrr("scause");
-    const svalue = riscv.csrr("stval");
-    const sepc = riscv.csrr("sepc");
+// TODO: find out the specification for this and log it for debug reasons
+const dtb = struct {};
+var dtb_address: ?*dtb = null;
 
-    println("exception: scause={x} svalue={x} sepc={x}", .{ scause, svalue, sepc });
-    println("(TIP) run: llvm-addr2line -e zig-out/bin/kernel {x}", .{sepc});
+// initialisation of hardware threads. this section is NOT unique per thread
+// TODO: I need some way to distinguish if this is the main hart or not
+export fn start(hartid: u64, dtb_ptr: *dtb) void {
+    riscv.set_sie_all();
 
-    while (true) {}
+    if (dtb_address == null) {
+        dtb_address = dtb_ptr;
+        println("INFO: assuming main thread for hart#{any}", .{hartid});
+        kmain();
+    } else {
+        println("INFO: assuming second thread for hart#{any}", .{hartid});
+        ksecond();
+    }
 }
 
-// hartid is set in a0, which is used for the first parameter of functions
-export fn kmain(hartid: u64) noreturn {
-    _ = hartid;
+fn kmain() noreturn {
+    println("hello from kmain", .{});
 
-    println("", .{});
-    println(motd, .{});
+    for (0..NCPU) |i| {
+        // this might fail sometimes, but its fine. we bring up as many cores as
+        // are available, max being NCPU
+        _ = sbi.HartStateManagement.hart_start(i, null);
+    }
 
-    mem.init();
-
-    while (true) {}
+    while (true) {
+        // wait for interrupt
+        asm volatile ("wfi");
+    }
 }
 
-export fn secondary(_: u64) noreturn {
-    while (true) {}
+fn ksecond() noreturn {
+    while (true) {
+        // wait for interrupt
+        asm volatile ("wfi");
+    }
 }

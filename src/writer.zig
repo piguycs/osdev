@@ -1,6 +1,8 @@
 const sbi = @import("riscv/sbi.zig");
 const std = @import("std");
 
+// TODO: make use of a global spinlock here, in order to prevent race a condition
+// when individual harts wish to log stuff
 const Writer = std.io.GenericWriter(u32, error{}, put_str);
 const sbi_writer = Writer{ .context = 0 };
 
