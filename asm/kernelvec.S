@@ -1,11 +1,11 @@
-        #
-        # interrupts and exceptions while in supervisor
-        # mode come here.
-        #
-        # the current stack is a kernel stack.
-        # push registers, call kerneltrap().
-        # when kerneltrap() returns, restore registers, return.
-        #
+# the following code is taken straight from xv6
+
+# interrupts and exceptions while in supervisor
+# mode come here.
+#
+# the current stack is a kernel stack.
+# push registers, call kerneltrap().
+# when kerneltrap() returns, restore registers, return.
 .globl kernelvec
 .align 4
 kernelvec:
@@ -33,7 +33,7 @@ kernelvec:
         sd t5, 232(sp)
         sd t6, 240(sp)
 
-        # call the C trap handler in trap.c
+        # call the trap handler in src/trap.zig
         call trap
 
         # restore registers.

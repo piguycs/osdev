@@ -7,16 +7,18 @@
 _start:
     jal setup_stack
 
-    la t0, _trap
+    la t0, kernelvec
     csrw stvec, t0
+
+    csrr t0, time
+    li t1, 1000000
+    add t0, t0, t1
+    csrw stimecmp, t0
 
     # when we call start, two parameters are passed
     # - a0: hartid - set by OpenSBI
     # - a1: fdt header ptr - set by OpenSBI (might be useful later)
     call start
-
-_trap:
-    call trap
 
 # stack0 -> | 0 | 1 | <- stack pointer
 # 0: offset

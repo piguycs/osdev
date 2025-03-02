@@ -13,4 +13,8 @@ pub const Header = packed struct {
     boot_cpuid_phy: u32,
     size_dt_strings: u32,
     size_dt_struct: u32,
+
+    pub fn isValid(self: Header) bool {
+        return @byteSwap(self.magic) == 0xd00dfeed;
+    }
 };
