@@ -14,7 +14,7 @@ pub const QEMU_OPTS = .{
 
 pub const QEMU_DBG = QEMU_OPTS ++ .{ "-s", "-S" };
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target_conf = .{
         .cpu_arch = .riscv64,
         .abi = .none,
@@ -33,8 +33,7 @@ pub fn build(b: *std.Build) void {
     });
 
     kernel.setLinkerScriptPath(b.path("linker.ld"));
-
-    kernel.addAssemblyFile(b.path("src/boot.S"));
+    try addAllAssemblyFiles(b, kernel); // adds all files from asm/
 
     b.installArtifact(kernel);
 
@@ -69,4 +68,18 @@ fn objdumpCmd(b: *std.Build) void {
 
     const step = b.step("objdump", "objdump the kernel (view asm)");
     step.dependOn(&objdump_cmd.step);
+}
+
+// Add this function to scan and add all assembly files from the asm/ directory
+fn addAllAssemblyFiles(b: *std.Build, kernel: *std.Build.Step.Compile) !void {
+    var dir = try std.fs.cwd().openDir("asm/", .{ .iterate = true });
+    defer dir.close();
+
+    var iterator = dir.iterate();
+    while (try iterator.next()) |entry| {
+        if (std.mem.endsWith(u8, entry.name, ".S")) {
+            const asm_path = b.fmt("asm/{s}", .{entry.name});
+            kernel.addAssemblyFile(b.path(asm_path));
+        }
+    }
 }

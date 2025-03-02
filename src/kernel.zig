@@ -1,11 +1,13 @@
+const defs = @import("defs.zig");
+const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
-const fdt = @import("riscv/fdt.zig");
-const println = @import("writer.zig").println;
+const writer = @import("writer.zig");
 
-///maximum supported CPU cores
-const NCPU = 4;
-pub export var stack0: [4096 * NCPU]u8 align(16) = undefined;
+const println = writer.println;
+const panic = writer.panic;
+
+export var stack0: [4096 * defs.NCPU]u8 align(16) = undefined;
 
 var fdt_header_addr: ?*fdt.Header = null;
 
@@ -24,15 +26,21 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
         println("INFO: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        println("INFO: assuming second thread for hart#{any}", .{hartid});
+        //println("info: assuming second thread for hart#{any}", .{hartid});
         ksecond();
     }
+}
+
+export fn trap() void {
+    panic("nyaaa", .{}, @src());
+
+    while (true) {}
 }
 
 fn kmain() noreturn {
     println("hello from kmain", .{});
 
-    for (0..NCPU) |i| {
+    for (0..defs.NCPU) |i| {
         // this might fail sometimes, but its fine. we bring up as many cores as
         // are available, max being NCPU
         _ = sbi.HartStateManagement.hart_start(i, null);
