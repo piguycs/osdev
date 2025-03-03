@@ -5,6 +5,10 @@ const panic = writer.panic;
 
 pub fn trapinit() void {}
 
+///# trap handler
+///a trap captures all interrupts and exceptipns. If it is an exception, we
+///panic. If it is an interrupt, we do whatever is appropriate
+// exporting this function to make it visible on gdb
 export fn trap() void {
     const sepc = riscv.csrr("sepc");
     const sstatus = riscv.csrr("sstatus");

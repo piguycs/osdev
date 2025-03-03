@@ -98,6 +98,19 @@ pub const HartStateManagement = struct {
     }
 };
 
+pub const TimeExt = struct {
+    const eid = 0x54494D45;
+    const fid_set_timer = 0x0;
+
+    pub fn set_timer(abs_time: u64) sbiret {
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_set_timer,
+            .arg0 = abs_time,
+        });
+    }
+};
+
 pub fn support(comptime ext: type) bool {
     const ret = BaseExt.probe_ext(ext.eid);
     return ret.value == 1;

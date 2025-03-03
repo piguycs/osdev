@@ -23,16 +23,22 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
         //riscv.csrw("stimecmp", riscv.csrr("time") + 1000000);
 
-        println("INFO: assuming main thread for hart#{any} {any}", .{ hartid, riscv.csrr("stimecmp") });
+        riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
+
+        println("INFO: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
         //println("info: assuming second thread for hart#{any}", .{hartid});
-        ksecond();
+        kwait();
     }
 }
 
+// exporting this function to make it visible on gdb
 export fn kmain() noreturn {
     println("hello from kmain", .{});
+
+    const time = riscv.csrr("time");
+    _ = sbi.TimeExt.set_timer(time + 10000000);
 
     for (0..defs.NCPU) |i| {
         // this might fail sometimes, but its fine. we bring up as many cores as
@@ -42,13 +48,11 @@ export fn kmain() noreturn {
 
     trap.trapinit();
 
-    while (true) {
-        // wait for interrupt
-        asm volatile ("wfi");
-    }
+    kwait();
 }
 
-fn ksecond() noreturn {
+// exporting this function to make it visible on gdb
+export fn kwait() noreturn {
     while (true) {
         // wait for interrupt
         asm volatile ("wfi");
