@@ -1,4 +1,5 @@
 const riscv = @import("riscv/riscv.zig");
+const sbi = @import("riscv/sbi.zig");
 const writer = @import("writer.zig");
 
 const panic = writer.panic;
@@ -25,8 +26,10 @@ export fn trap() void {
     const scause: Cause = @enumFromInt(riscv.csrr("scause"));
 
     if (scause == Cause.Timer) {
-        println("timer hit", .{});
-        hang(); // we do not reset the interrupt reg yet
+        // println("timer hit", .{}); // this is gonna be important for scheduling
+        const time = riscv.csrr("time");
+        _ = sbi.TimeExt.set_timer(time + 10000000);
+        return;
     }
 
     panic("sepc=0x{x} sstatus=0x{x} scause=0x{x}", .{ sepc, sstatus, @intFromEnum(scause) }, null);

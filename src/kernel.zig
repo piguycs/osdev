@@ -21,7 +21,7 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
         if (!fdt_header_addr.?.isValid()) panic("fdt is invalid", .{}, @src());
 
         //disabling timer interrupts for now
-        //riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
+        riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
         println("INFO: assuming main thread for hart#{any}", .{hartid});
         kmain();
@@ -31,7 +31,6 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
     }
 }
 
-// exporting this function to make it visible on gdb
 export fn kmain() noreturn {
     println("hello from kmain", .{});
 
@@ -43,10 +42,8 @@ export fn kmain() noreturn {
     kwait();
 }
 
-// exporting this function to make it visible on gdb
 export fn kwait() noreturn {
     while (true) {
-        // wait for interrupt
         asm volatile ("wfi");
     }
 }

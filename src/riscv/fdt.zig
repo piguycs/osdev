@@ -1,7 +1,3 @@
-fn be32_to_cpu(value: u32) u32 {
-    return @byteSwap(value);
-}
-
 // would have been nice to have zig/issues/3380
 pub const Header = packed struct {
     magic: u32,
