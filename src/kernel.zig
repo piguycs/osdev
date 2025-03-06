@@ -71,6 +71,8 @@ export fn kmain() noreturn {
     });
 
     // Do more stuff here Kunal!
+
+    // Drop to (s)hell
     simple_shell();
 
     kwait();
