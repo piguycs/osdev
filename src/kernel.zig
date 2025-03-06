@@ -1,7 +1,9 @@
-const defs = @import("defs.zig");
 const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
+const defs = @import("defs.zig");
+const memory = @import("memory.zig");
+const spinlock = @import("spinlock.zig");
 const trap = @import("trap.zig");
 const writer = @import("writer.zig");
 
@@ -20,13 +22,12 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
         if (!fdt_header_addr.?.isValid()) panic("fdt is invalid", .{}, @src());
 
-        //disabling timer interrupts for now
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
         println("INFO: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        //println("info: assuming second thread for hart#{any}", .{hartid});
+        println("info: assuming second thread for hart#{any}", .{hartid});
         kwait();
     }
 }
@@ -34,10 +35,16 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 export fn kmain() noreturn {
     println("hello from kmain", .{});
 
+    trap.init();
+    memory.init();
+    writer.init();
+
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
 
-    trap.trapinit();
+    for (0..defs.NCPU) |id| {
+        _ = sbi.HartStateManagement.hart_start(id, null);
+    }
 
     kwait();
 }
