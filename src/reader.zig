@@ -6,9 +6,8 @@ const SourceLocation = std.builtin.SourceLocation;
 const Reader = std.io.GenericReader(u32, error{}, read_str);
 const sbi_reader = Reader{ .context = 0 };
 
-fn read_str(_: u32, _: []u8) !usize {
-    var str: [1024]u8 = undefined; // Artur: Not sure if this is the best way to do this?
-    const bytes_read = sbi.DebugConsoleExt.read(&str);
+fn read_str(_: u32, str: []u8) !usize {
+    const bytes_read = sbi.DebugConsoleExt.read(@intFromPtr(&str), 2048);
     return bytes_read.value;
 }
 

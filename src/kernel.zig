@@ -43,13 +43,14 @@ export fn kmain() noreturn {
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
 
-    for (0..defs.NCPU) |id| {
-        _ = sbi.HartStateManagement.hart_start(id, null);
-    }
+    //for (0..defs.NCPU) |id| {
+    //    _ = sbi.HartStateManagement.hart_start(id, null);
+    //}
 
     // TEST: Read from console
-    var str: [1024]u8 = undefined;
-    _ = reader.read(&str) catch {};
+    var str: [1]u8 = undefined;
+    asm volatile ("wfi");
+    _ = sbi.DebugConsoleExt.read(@intFromPtr(&str), 1);
     println("read: {s}", .{str});
 
     kwait();
