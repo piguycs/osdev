@@ -28,7 +28,7 @@ export fn trap() void {
 
     // this is gonna be important for scheduling
     if (scause == @intFromEnum(Cause.Timer)) {
-        println("timer hit", .{});
+        // println("timer hit", .{});
         const time = riscv.csrr("time");
         _ = sbi.TimeExt.set_timer(time + 10000000);
         return;

@@ -6,6 +6,7 @@ const memory = @import("memory.zig");
 const spinlock = @import("spinlock.zig");
 const trap = @import("trap.zig");
 const writer = @import("writer.zig");
+const reader = @import("reader.zig");
 
 const println = writer.println;
 const panic = writer.panic;
@@ -45,6 +46,11 @@ export fn kmain() noreturn {
     for (0..defs.NCPU) |id| {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
+
+    // TEST: Read from console
+    var str: [1024]u8 = undefined;
+    _ = reader.read(&str) catch {};
+    println("read: {s}", .{str});
 
     kwait();
 }

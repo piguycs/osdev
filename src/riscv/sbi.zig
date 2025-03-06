@@ -62,12 +62,12 @@ pub const DebugConsoleExt = struct {
         });
     }
 
-    pub fn read(str: []const u8) sbiret {
+    pub fn read(str: *[1024]u8) sbiret {
         return ecall(.{
             .ext = eid,
             .fid = fid_read,
             .arg0 = str.len,
-            .arg1 = @intFromPtr(str.ptr),
+            .arg1 = @intFromPtr(str),
         });
     }
 };
