@@ -10,13 +10,13 @@ recommend using [zvm](https://www.zvm.app/)
 
 ```sh
 # make sure the version is correct
-zig version
+$ zig version
 0.13.0
 ```
 
 ```sh
 # make sure the virt machine exists
-qemu-system-riscv64 -machine ?
+$ qemu-system-riscv64 -machine ?
 Supported machines are:
 microchip-icicle-kit Microchip PolarFire SoC Icicle Kit
 none                 empty machine
@@ -30,7 +30,7 @@ virt                 RISC-V VirtIO board
 ## Running
 
 ```sh
-zig build run
+$ zig build run
 ```
 
 ## Debugging
@@ -48,19 +48,19 @@ nice qol feature. I recommend setting this up, as it saves a lot of time. If
 you are using `lldb`, this step would be different.
 
 ```sh
-echo "add-auto-load-safe-path $(pwd)/.gdbinit" >> ~/.config/gdb/gdbinit
+$ echo "add-auto-load-safe-path $(pwd)/.gdbinit" >> ~/.config/gdb/gdbinit
 ```
 
 ### 3. Debug!
 
 ```sh
-zig build run-dbg
+$ zig build run-dbg
 ```
 In another terminal window (in the same directory), open gdb. I recommend using
 `tmux` for this, as it makes switching between panes and creating splits easy.
 
 ```sh
-gdb
+$ gdb
 ```
 
 That should be it! Here are some commond gdb aliases that you might use:
