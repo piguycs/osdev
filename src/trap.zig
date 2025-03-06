@@ -24,15 +24,15 @@ pub fn init() void {}
 export fn trap() void {
     const sepc = riscv.csrr("sepc");
     const sstatus = riscv.csrr("sstatus");
-    const scause: Cause = @enumFromInt(riscv.csrr("scause"));
+    const scause = riscv.csrr("scause");
 
     // this is gonna be important for scheduling
-    if (scause == Cause.Timer) {
-        //println("timer hit", .{});
+    if (scause == @intFromEnum(Cause.Timer)) {
+        println("timer hit", .{});
         const time = riscv.csrr("time");
         _ = sbi.TimeExt.set_timer(time + 10000000);
         return;
     }
 
-    panic("sepc=0x{x} sstatus=0x{x} scause=0x{x}", .{ sepc, sstatus, @intFromEnum(scause) }, null);
+    panic("sepc=0x{x} sstatus=0x{x} scause=0x{x}", .{ sepc, sstatus, scause }, null);
 }
