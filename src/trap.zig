@@ -14,7 +14,8 @@ const Cause = enum(u64) {
     CounterOverflow = 0x8000000000000013,
 };
 
-pub fn trapinit() void {}
+///stub function, does nothing
+pub fn init() void {}
 
 ///# trap handler
 ///a trap captures all interrupts and exceptipns. If it is an exception, we
@@ -25,8 +26,9 @@ export fn trap() void {
     const sstatus = riscv.csrr("sstatus");
     const scause: Cause = @enumFromInt(riscv.csrr("scause"));
 
+    // this is gonna be important for scheduling
     if (scause == Cause.Timer) {
-        // println("timer hit", .{}); // this is gonna be important for scheduling
+        //println("timer hit", .{});
         const time = riscv.csrr("time");
         _ = sbi.TimeExt.set_timer(time + 10000000);
         return;
