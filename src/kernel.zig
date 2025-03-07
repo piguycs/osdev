@@ -10,7 +10,6 @@ const reader = @import("reader.zig");
 const prompts = @import("prompts.zig");
 const shell = @import("shell.zig");
 
-const simple_shell = shell.shell;
 const print = writer.print;
 const println = writer.println;
 const printchar = writer.printchar;
@@ -70,7 +69,7 @@ export fn kmain() noreturn {
         .clear_line = true,
     });
 
-    simple_shell();
+    shell.kshell();
 
     kwait();
 }

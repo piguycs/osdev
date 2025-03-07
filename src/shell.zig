@@ -78,6 +78,7 @@ pub fn shell_command(input: []const u8) void {
     println("Type 'help' for available commands", .{});
 }
 
+///very basic repl, runs as a part of the kernel and not as a process
 pub fn kshell() void {
     while (true) {
         prompt(.{

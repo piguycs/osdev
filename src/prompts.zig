@@ -1,6 +1,7 @@
 const sbi = @import("riscv/sbi.zig");
 const writer = @import("writer.zig");
 const reader = @import("reader.zig");
+
 const print = writer.print;
 const println = writer.println;
 const printchar = writer.printchar;
@@ -9,6 +10,8 @@ const panic = writer.panic;
 const UTF_BACK = 0x08;
 const UTF_SPACE = 0x20;
 const UTF_TILDE = 0x7E; // we use this for backspace
+const UTF_LF = 0x0A; // line feed
+const UTF_CR = 0x0D; // carriage return
 
 pub const Prompt = struct {
     prompt: []const u8,
@@ -20,12 +23,6 @@ pub const Prompt = struct {
     debug: bool = false,
     clear_line: bool = false,
 };
-
-fn backspace() void {
-    printchar(UTF_BACK);
-    printchar(UTF_SPACE);
-    printchar(UTF_BACK);
-}
 
 pub fn prompt(args: Prompt) void {
     if (args.debug) {
@@ -64,14 +61,13 @@ pub fn prompt(args: Prompt) void {
                         panic("buffer overflow", .{}, @src());
                     }
 
-                    // Echo the character
-                    if (char != 0x0A and char != 0x0D and args.show_input) { // don't echo line endings
+                    if (!isLineEnd(char) and args.show_input) {
                         printchar(char);
                     }
                 }
 
                 // Check for line ending
-                if (char == 0x0A or char == 0x0D and !args.immediate) {
+                if (isLineEnd(char) and !args.immediate) {
                     // println("\nTOTAL INPUT: {s} ({d} bytes)", .{ full_input[0..full_input_index], full_input_index });
                     break :outer;
                 }
@@ -90,4 +86,14 @@ pub fn prompt(args: Prompt) void {
     }
 
     args.callback(full_input[0..full_input_index]);
+}
+
+fn backspace() void {
+    printchar(UTF_BACK);
+    printchar(UTF_SPACE);
+    printchar(UTF_BACK);
+}
+
+fn isLineEnd(char: u8) bool {
+    return char == UTF_LF or char == UTF_CR;
 }
