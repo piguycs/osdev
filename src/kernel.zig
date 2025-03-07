@@ -31,10 +31,11 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
-        println("INFO: assuming main thread for hart#{any}", .{hartid});
+        _ = hartid;
+        //println("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        println("info: assuming second thread for hart#{any}", .{hartid});
+        //println("info: assuming second thread for hart#{any}", .{hartid});
         kwait();
     }
 }
@@ -50,8 +51,10 @@ export fn kmain() noreturn {
     trap.init();
     writer.init();
 
-    const alloc = memory.KAlloc.init(4096); // 16MB of memory
-    _ = alloc;
+    var alloc = memory.KAlloc.init();
+
+    const first = alloc.alloc();
+    println("first alloc: 0x{x} size={any}", .{ @intFromPtr(first.ptr), first.len });
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
