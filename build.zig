@@ -4,6 +4,7 @@ pub const QEMU_OPTS = .{
     "qemu-system-riscv64", "-nographic",
     "-machine",            "virt",
     "-smp",                "4",
+    "-m",                  "128M",
     "-bios",               "default",
     "-kernel",             "zig-out/bin/kernel",
     // serial output + console gets stored in a logfile
