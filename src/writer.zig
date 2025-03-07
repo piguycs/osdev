@@ -49,7 +49,7 @@ pub fn printchar(char: u8) void {
     _ = put_char(0, &v) catch {};
 }
 
-pub fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) void {
+pub fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) noreturn {
     if (panicked) hang();
 
     sbi_writer.print("\nPANIC: ", .{}) catch {};
