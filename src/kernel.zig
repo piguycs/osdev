@@ -31,11 +31,10 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
-        _ = hartid;
-        //println("info: assuming main thread for hart#{any}", .{hartid});
+        println("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        //println("info: assuming second thread for hart#{any}", .{hartid});
+        println("info: assuming second thread for hart#{any}", .{hartid});
         kwait();
     }
 }
@@ -61,7 +60,7 @@ export fn kmain() noreturn {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
 
-    //shell.kshell();
+    shell.kshell();
 
     kwait();
 }

@@ -66,7 +66,7 @@ pub fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) nore
         sbi_writer.print("\n", .{}) catch {};
     }
 
-    return hang();
+    hang();
 }
 
 export fn hang() noreturn {
