@@ -53,11 +53,11 @@ export fn kmain() noreturn {
     writer.init();
 
     const time = riscv.csrr("time");
-    _ = sbi.TimeExt.set_timer(time + 10); //10000000
+    _ = sbi.TimeExt.set_timer(time + 10000000);
 
-    //for (0..defs.NCPU) |id| {
-    //    _ = sbi.HartStateManagement.hart_start(id, null);
-    //}
+    for (0..defs.NCPU) |id| {
+        _ = sbi.HartStateManagement.hart_start(id, null);
+    }
 
     prompt(.{
         .prompt = "Press enter to continue... ",
@@ -70,15 +70,12 @@ export fn kmain() noreturn {
         .clear_line = true,
     });
 
-    // Do more stuff here Kunal!
-
-    // Drop to (s)hell
     simple_shell();
 
     kwait();
 }
 
-pub fn kwait() noreturn {
+export fn kwait() noreturn {
     while (true) {
         asm volatile ("wfi");
     }
