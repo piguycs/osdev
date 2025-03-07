@@ -52,9 +52,7 @@ export fn kmain() noreturn {
     writer.init();
 
     var alloc = memory.KAlloc.init();
-
-    const first = alloc.alloc();
-    println("first alloc: 0x{x} size={any}", .{ @intFromPtr(first.ptr), first.len });
+    _ = &alloc; // TODO: use this for processes etc
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
