@@ -6,6 +6,10 @@ const println = writer.println;
 const printchar = writer.printchar;
 const panic = writer.panic;
 
+const UTF_BACK = 0x08;
+const UTF_SPACE = 0x20;
+const UTF_TILDE = 0x7E; // we use this for backspace
+
 pub const Prompt = struct {
     prompt: []const u8,
     callback: fn (input: []const u8) void,
@@ -17,8 +21,13 @@ pub const Prompt = struct {
     clear_line: bool = false,
 };
 
+fn backspace() void {
+    printchar(UTF_BACK);
+    printchar(UTF_SPACE);
+    printchar(UTF_BACK);
+}
+
 pub fn prompt(args: Prompt) void {
-    // Show prompt
     if (args.debug) {
         print("Prompt: {s}", .{args.prompt});
     } else {
@@ -31,21 +40,16 @@ pub fn prompt(args: Prompt) void {
     var result: sbi.sbiret = undefined;
     var full_input: [args.max_len]u8 = undefined;
     var full_input_index: u64 = 0;
+
     outer: while (true) {
         result = sbi.DebugConsoleExt.read(@intFromPtr(&str), str.len);
 
         if (result.errno == .Success and result.value > 0) {
-            // Process each character received
             for (str[0..result.value]) |char| {
-                // support for backspace
-                if (char == 0x7E or char == 0x7F and !args.simple) { // Simple mode doesn't support backspace
+                if (char == UTF_TILDE and !args.simple) {
                     if (full_input_index > 0) {
                         full_input_index -= 1;
-                        if (args.show_input) {
-                            printchar(0x08); // backspace, space, backspace to clear the character, yes looks cursed
-                            printchar(0x20);
-                            printchar(0x08);
-                        }
+                        if (args.show_input) backspace();
                     }
                     continue;
                 }
@@ -78,8 +82,7 @@ pub fn prompt(args: Prompt) void {
             }
         }
 
-        // Wait if we got no data (even on success) or got an error
-        asm volatile ("wfi" ::: "memory");
+        asm volatile ("wfi");
     }
 
     if (args.clear_line) {

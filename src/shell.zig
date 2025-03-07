@@ -1,15 +1,13 @@
-const sbi = @import("riscv/sbi.zig");
-const writer = @import("writer.zig");
-const reader = @import("reader.zig");
-const strutils = @import("strutils.zig");
+const std = @import("std");
 const riscv = @import("riscv/riscv.zig");
+const sbi = @import("riscv/sbi.zig");
 const prompts = @import("prompts.zig");
+const reader = @import("reader.zig");
+const writer = @import("writer.zig");
 
-const prompt = prompts.prompt;
 const print = writer.print;
 const println = writer.println;
-const trim = strutils.trim;
-const streql = strutils.streql;
+const prompt = prompts.prompt;
 
 const ShellCommand = struct {
     name: []const u8,
@@ -24,11 +22,6 @@ const shell_commands = [_]ShellCommand{
         .handler = cmd_help,
     },
     .{
-        .name = "regs",
-        .help = "Show CPU registers",
-        .handler = cmd_regs,
-    },
-    .{
         .name = "echo",
         .help = "Echo arguments back",
         .handler = cmd_echo,
@@ -41,17 +34,6 @@ fn cmd_help(args: []const []const u8) void {
     for (shell_commands) |cmd| {
         println("  {s: <10} - {s}", .{ cmd.name, cmd.help });
     }
-}
-
-fn cmd_regs(args: []const []const u8) void {
-    _ = args;
-    const satp = riscv.csrr("satp");
-    const sstatus = riscv.csrr("sstatus");
-    const sie = riscv.csrr("sie");
-    println("CPU Registers:", .{});
-    println("  satp    = 0x{x:0>16}", .{satp});
-    println("  sstatus = 0x{x:0>16}", .{sstatus});
-    println("  sie     = 0x{x:0>16}", .{sie});
 }
 
 fn cmd_echo(args: []const []const u8) void {
@@ -70,10 +52,11 @@ pub fn shell_command(input: []const u8) void {
     var token_start: usize = 0;
     var i: usize = 0;
     while (i <= input.len) : (i += 1) {
-        if (i == input.len or input[i] == ' ' or input[i] == '\n' or input[i] == '\r') {
+        if (i == input.len or std.ascii.isWhitespace(input[i])) {
             if (token_start != i) { // Skip empty tokens (multiple spaces)
                 if (token_count >= tokens.len) break;
-                tokens[token_count] = trim(input[token_start..i]);
+                const trimmed = std.mem.trim(u8, input[token_start..i], &std.ascii.whitespace);
+                tokens[token_count] = trimmed;
                 token_count += 1;
             }
             token_start = i + 1;
@@ -85,17 +68,17 @@ pub fn shell_command(input: []const u8) void {
     // Find and execute command
     const cmd = tokens[0];
     for (shell_commands) |command| {
-        if (streql(cmd, command.name)) {
+        if (std.mem.eql(u8, cmd, command.name)) {
             command.handler(tokens[0..token_count]);
             return;
         }
     }
+
     println("Unknown command: {s}", .{cmd});
     println("Type 'help' for available commands", .{});
 }
 
-pub fn shell() void {
-    // Simple shell?
+pub fn kshell() void {
     while (true) {
         prompt(.{
             .prompt = "$ ",

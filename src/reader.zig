@@ -17,7 +17,8 @@ pub fn init() void {
     readLock = spinlock.Lock.new("reader");
 }
 
-pub fn read(str: []u8) !usize { // Artur: TODO: Add terminator for the input?
+// Artur: TODO: Add terminator for the input
+pub fn read(str: []u8) !usize {
     // We should only have one reader at a time
     readLock.acquire();
     defer readLock.release();

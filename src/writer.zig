@@ -1,14 +1,17 @@
+const std = @import("std");
 const sbi = @import("riscv/sbi.zig");
 const spinlock = @import("spinlock.zig");
-const std = @import("std");
+
 const SourceLocation = std.builtin.SourceLocation;
 
 var panicked = false;
 
 const Writer = std.io.GenericWriter(u32, error{}, put_str);
 const WriterChar = std.io.GenericWriter(u32, error{}, put_char);
+
 const sbi_writer = Writer{ .context = 0 };
 const sbi_writer_char = WriterChar{ .context = 0 };
+
 fn put_str(_: u32, str: []const u8) !usize {
     _ = sbi.DebugConsoleExt.write(str);
     return str.len;
@@ -46,7 +49,7 @@ pub fn printchar(char: u8) void {
     _ = put_char(0, &v) catch {};
 }
 
-pub inline fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) void {
+pub fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) void {
     if (panicked) hang();
 
     sbi_writer.print("\nPANIC: ", .{}) catch {};
