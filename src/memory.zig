@@ -11,8 +11,8 @@ const PAGE_SIZE = 4096;
 const MEM_SIZE = 64 * 1024 * 1024; // 64M
 const MEM_END = 0x80200000 + MEM_SIZE;
 
-pub const MemTree = struct {
-    next: ?*MemTree,
+pub const FreeList = struct {
+    next: ?*FreeList,
 };
 
 /// # linear allocator
@@ -20,12 +20,12 @@ pub const MemTree = struct {
 /// - allocates entire 4k pages n number of times
 /// - this CAN result in fragmentation
 pub const KAlloc = struct {
-    mem: MemTree,
+    freelist: FreeList,
     lock: sync.Lock,
 
     pub fn init() KAlloc {
         var kmem = KAlloc{
-            .mem = MemTree{ .next = null },
+            .freelist = FreeList{ .next = null },
             .lock = sync.Lock.new("kmem"),
         };
 
@@ -49,23 +49,23 @@ pub const KAlloc = struct {
         // we set all invalid mem addresses to 1 and all acquired ones to 0
         @memset(phyaddr, 1);
 
-        const kmem: *MemTree = @ptrCast(@alignCast(phyaddr.ptr));
+        const kmem: *FreeList = @ptrCast(@alignCast(phyaddr.ptr));
 
         self.lock.acquire();
         defer self.lock.release();
 
-        kmem.next = self.mem.next;
-        self.mem.next = kmem;
+        kmem.next = self.freelist.next;
+        self.freelist.next = kmem;
     }
 
     pub fn alloc(self: *KAlloc) []u8 {
         self.lock.acquire();
         defer self.lock.release();
 
-        const r = self.mem.next;
+        const r = self.freelist.next;
 
         if (r) |node| {
-            self.mem.next = node.next;
+            self.freelist.next = node.next;
             const mem = @as([*]u8, @ptrCast(node))[0..PAGE_SIZE];
             @memset(mem, 0);
             return mem;
