@@ -6,9 +6,16 @@ const memory = @import("memory.zig");
 const spinlock = @import("spinlock.zig");
 const trap = @import("trap.zig");
 const writer = @import("writer.zig");
+const reader = @import("reader.zig");
+const prompts = @import("prompts.zig");
+const shell = @import("shell.zig");
 
+const print = writer.print;
 const println = writer.println;
+const printchar = writer.printchar;
 const panic = writer.panic;
+const prompt = prompts.prompt;
+const shell_command = shell.shell_command;
 
 export var stack0: [4096 * defs.NCPU]u8 align(16) = undefined;
 
@@ -32,6 +39,11 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
     }
 }
 
+fn start_stuf(_: []const u8) void {
+    // println("Prompt got: {s}", .{input});
+    println("Starting...", .{});
+}
+
 export fn kmain() noreturn {
     println("hello from kmain", .{});
 
@@ -45,6 +57,19 @@ export fn kmain() noreturn {
     for (0..defs.NCPU) |id| {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
+
+    prompt(.{
+        .prompt = "Press enter to continue... ",
+        .callback = start_stuf,
+        .simple = true,
+        .max_len = 1,
+        .immediate = true,
+        .show_input = false,
+        .debug = false,
+        .clear_line = true,
+    });
+
+    shell.kshell();
 
     kwait();
 }

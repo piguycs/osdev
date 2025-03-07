@@ -49,8 +49,8 @@ pub const BaseExt = struct {
 
 pub const DebugConsoleExt = struct {
     const eid = 0x4442434E;
-    const fid_write = 0x0;
-    const fid_read = 0x1;
+    const fid_write = 0;
+    const fid_read = 1;
 
     pub fn write(str: []const u8) sbiret {
         const strptr = @intFromPtr(str.ptr);
@@ -62,12 +62,12 @@ pub const DebugConsoleExt = struct {
         });
     }
 
-    pub fn read(str: []const u8) sbiret {
+    pub fn read(ptr: u64, len: u64) sbiret {
         return ecall(.{
             .ext = eid,
             .fid = fid_read,
-            .arg0 = str.len,
-            .arg1 = @intFromPtr(str.ptr),
+            .arg0 = len,
+            .arg1 = ptr,
         });
     }
 };
