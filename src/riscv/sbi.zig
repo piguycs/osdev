@@ -51,6 +51,7 @@ pub const DebugConsoleExt = struct {
     const eid = 0x4442434E;
     const fid_write = 0;
     const fid_read = 1;
+    const fid_write_char = 2;
 
     pub fn write(str: []const u8) sbiret {
         const strptr = @intFromPtr(str.ptr);
@@ -59,6 +60,14 @@ pub const DebugConsoleExt = struct {
             .fid = fid_write,
             .arg0 = str.len,
             .arg1 = strptr,
+        });
+    }
+
+    pub fn write_char(c: u8) sbiret {
+        return ecall(.{
+            .ext = eid,
+            .fid = fid_write_char,
+            .arg0 = c,
         });
     }
 
