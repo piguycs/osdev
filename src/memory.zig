@@ -71,8 +71,7 @@ pub const KAlloc = struct {
             return mem;
         }
 
-        panic("", .{}, @src());
-        unreachable;
+        panic("out of memory", .{}, @src());
     }
 };
 
