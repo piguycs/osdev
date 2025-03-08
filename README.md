@@ -1,5 +1,11 @@
 # Simple OSDEV Project
 
+## TODO
+
+- [ ] std-compatible page allocator
+- [ ] buddy allocator (sexually transmitted)
+- [ ] sv39 (do theory and then impl)
+
 ## Dependencies
 
 - `zig`: 0.13.0
