@@ -1,5 +1,5 @@
 const pci = @import("pci.zig");
-const writer = @import("writer.zig");
+const writer = @import("utils/writer.zig");
 const println = writer.println;
 
 var global_display: BochsDisplay = undefined;

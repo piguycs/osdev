@@ -168,7 +168,7 @@ pub fn get_bar_info(bus: u8, device: u8, function: u8, bar_num: u8) struct { bas
 }
 
 pub fn init() void {
-    const writer = @import("writer.zig");
+    const writer = @import("utils/writer.zig");
     writer.println("Initializing PCI subsystem...", .{});
     enumerate_devices();
 }
@@ -285,7 +285,7 @@ pub fn get_device_info(bus: u8, device: u8, function: u8) PCIDeviceInfo {
 }
 
 fn print_device_info(bus: u8, device: u8, function: u8, info: PCIDeviceInfo) void {
-    const writer = @import("writer.zig");
+    const writer = @import("utils/writer.zig");
     writer.println("PCI Device: {x:0>2}:{x:0>2}.{x:0>1}", .{ bus, device, function });
     writer.println("  Vendor ID: {x:0>4}, Device ID: {x:0>4}", .{ info.vendor_id, info.device_id });
     writer.println("  Class: {x:0>2}, Subclass: {x:0>2}, ProgIF: {x:0>2}", .{ info.class_code, info.subclass, info.prog_if });
