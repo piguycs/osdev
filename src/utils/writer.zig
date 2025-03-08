@@ -1,6 +1,6 @@
 const std = @import("std");
-const sbi = @import("riscv/sbi.zig");
-const spinlock = @import("spinlock.zig");
+const sbi = @import("../riscv/sbi.zig");
+const spinlock = @import("../spinlock.zig");
 
 const SourceLocation = std.builtin.SourceLocation;
 
