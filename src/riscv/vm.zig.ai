@@ -1,0 +1,203 @@
+// THIS IS AI FUCKERY, BE CAREFUL, DO NOT TOUCH UNTIL REVISED
+const std = @import("std");
+const riscv = @import("riscv.zig");
+const writer = @import("../writer.zig");
+const println = writer.println;
+const panic = writer.panic;
+
+// RISC-V SV39 paging constants
+const SATP_MODE_SV39: u64 = 8;
+const SATP_MODE_SHIFT: u6 = 60;
+const PAGE_SIZE: u64 = 4096;
+const PAGE_SHIFT: u6 = 12;
+const MEGA_PAGE_SIZE: u64 = 2 * 1024 * 1024; // 2MB pages
+const MEGA_PAGE_SHIFT: u6 = 21;
+
+// Page table entry flags
+const PTE_V: u64 = 1 << 0; // Valid
+const PTE_R: u64 = 1 << 1; // Read
+const PTE_W: u64 = 1 << 2; // Write
+const PTE_X: u64 = 1 << 3; // Execute
+const PTE_U: u64 = 1 << 4; // User
+const PTE_G: u64 = 1 << 5; // Global
+const PTE_A: u64 = 1 << 6; // Accessed
+const PTE_D: u64 = 1 << 7; // Dirty
+
+// Memory type flags using RSW bits
+const PTE_DEVICE: u64 = 1 << 8; // Device memory (non-cacheable)
+const PTE_NORMAL: u64 = 0 << 8; // Normal memory (cacheable)
+
+// Memory regions
+const KERNEL_BASE: u64 = 0x80200000;
+const KERNEL_SIZE: u64 = 64 * 1024 * 1024; // 64MB
+const PCI_MEM_START: u64 = 0x40000000;
+const PCI_MEM_SIZE: u64 = 32 * 1024 * 1024; // 32MB
+const PCI_CFG_START: u64 = 0x30000000;
+const PCI_CFG_SIZE: u64 = 0x10000000; // 256MB to cover all possible buses
+
+// Framebuffer specific mapping - ensure we map enough for the display mode
+const FB_START: u64 = 0x40000000;
+const FB_WIDTH: u64 = 640;
+const FB_HEIGHT: u64 = 480;
+const FB_BPP: u64 = 32;
+const FB_SIZE: u64 = (FB_WIDTH * FB_HEIGHT * FB_BPP / 8 + PAGE_SIZE - 1) & ~(PAGE_SIZE - 1); // Round up to page size
+const MMIO_START: u64 = 0x41000000;
+const MMIO_SIZE: u64 = 4096; // 4KB as reported by device
+
+// Page table entry structure
+const PageTableEntry = packed struct {
+    flags: u10,
+    ppn: u44,
+    reserved: u10,
+};
+
+// Root page table (level 2 for SV39)
+var root_page_table: [512]PageTableEntry align(PAGE_SIZE) = undefined;
+
+// Page allocator state - increased pool size
+var page_pool: [2048 * PAGE_SIZE]u8 align(PAGE_SIZE) = undefined;
+var next_free_page: usize = 0;
+
+pub fn init() void {
+    println("Initializing virtual memory...", .{});
+
+    // Clear the root page table
+    @memset(@as([*]u8, @ptrCast(&root_page_table))[0..@sizeOf(@TypeOf(root_page_table))], 0);
+
+    // Map essential regions:
+    // 1. UART and other early boot devices (0x0 - 0x1000000)
+    map_range(0x00000000, 0x00000000, 0x1000000, PTE_R | PTE_W | PTE_DEVICE | PTE_A | PTE_D);
+
+    // 2. Kernel code and data
+    map_range(KERNEL_BASE, KERNEL_BASE, KERNEL_SIZE, PTE_R | PTE_W | PTE_X | PTE_G | PTE_NORMAL | PTE_A | PTE_D);
+
+    // 3. PCI configuration space
+    map_range(PCI_CFG_START, PCI_CFG_START, PCI_CFG_SIZE, PTE_R | PTE_W | PTE_DEVICE | PTE_A | PTE_D);
+
+    // 4. Framebuffer
+    println("Mapping framebuffer: start=0x{x}, size=0x{x}", .{ FB_START, FB_SIZE });
+    map_range(FB_START, FB_START, FB_SIZE, PTE_R | PTE_W | PTE_DEVICE | PTE_A | PTE_D);
+
+    // 5. MMIO registers
+    println("Mapping MMIO: start=0x{x}, size=0x{x}", .{ MMIO_START, MMIO_SIZE });
+    map_range(MMIO_START, MMIO_START, MMIO_SIZE, PTE_R | PTE_W | PTE_DEVICE | PTE_A | PTE_D);
+
+    // Debug output of page table usage
+    println("Page table pages used: {}", .{next_free_page});
+
+    // Set up SATP register for SV39
+    const satp = (SATP_MODE_SV39 << SATP_MODE_SHIFT) |
+        (@intFromPtr(&root_page_table) >> PAGE_SHIFT);
+
+    // Ensure all page table updates are visible
+    asm volatile ("sfence.vma" ::: "memory");
+
+    // Switch to new page tables
+    riscv.csrw("satp", satp);
+
+    // Flush TLB and instruction cache
+    asm volatile ("sfence.vma; fence.i" ::: "memory");
+
+    println("Virtual memory initialized", .{});
+}
+
+fn map_range(vaddr: u64, paddr: u64, size: u64, flags: u64) void {
+    var v = vaddr;
+    var p = paddr;
+    var s = size;
+
+    // Try to use 2MB pages where possible
+    while (s >= MEGA_PAGE_SIZE and (v & (MEGA_PAGE_SIZE - 1)) == 0 and (p & (MEGA_PAGE_SIZE - 1)) == 0) {
+        map_mega_page(v, p, flags | PTE_V);
+        v += MEGA_PAGE_SIZE;
+        p += MEGA_PAGE_SIZE;
+        s -= MEGA_PAGE_SIZE;
+    }
+
+    // Map remaining memory with 4KB pages
+    while (s > 0) {
+        map_page(v, p, flags | PTE_V);
+        v += PAGE_SIZE;
+        p += PAGE_SIZE;
+        s -= PAGE_SIZE;
+    }
+}
+
+fn map_mega_page(vaddr: u64, paddr: u64, flags: u64) void {
+    const vpn2 = (vaddr >> 30) & 0x1FF;
+    const vpn1 = (vaddr >> 21) & 0x1FF;
+
+    // Ensure level 1 page table exists
+    const pte2 = &root_page_table[vpn2];
+    if ((pte2.flags & PTE_V) == 0) {
+        const pt1 = allocate_page();
+        pte2.* = PageTableEntry{
+            .flags = @truncate(PTE_V),
+            .ppn = @truncate(pt1 >> PAGE_SHIFT),
+            .reserved = 0,
+        };
+    }
+
+    // Get level 1 page table
+    const pt1 = @as([*]PageTableEntry, @ptrFromInt((pte2.ppn << PAGE_SHIFT)))[0..512];
+    const pte1 = &pt1[vpn1];
+
+    // Create 2MB page mapping
+    pte1.* = PageTableEntry{
+        .flags = @truncate(flags),
+        .ppn = @truncate(paddr >> PAGE_SHIFT),
+        .reserved = 0,
+    };
+}
+
+fn map_page(vaddr: u64, paddr: u64, flags: u64) void {
+    const vpn2 = (vaddr >> 30) & 0x1FF;
+    const vpn1 = (vaddr >> 21) & 0x1FF;
+    const vpn0 = (vaddr >> 12) & 0x1FF;
+
+    // Ensure page tables exist
+    const pte2 = &root_page_table[vpn2];
+    if ((pte2.flags & PTE_V) == 0) {
+        const pt1 = allocate_page();
+        pte2.* = PageTableEntry{
+            .flags = @truncate(PTE_V),
+            .ppn = @truncate(pt1 >> PAGE_SHIFT),
+            .reserved = 0,
+        };
+    }
+
+    const pt1 = @as([*]PageTableEntry, @ptrFromInt((pte2.ppn << PAGE_SHIFT)))[0..512];
+    const pte1 = &pt1[vpn1];
+    if ((pte1.flags & PTE_V) == 0) {
+        const pt0 = allocate_page();
+        pte1.* = PageTableEntry{
+            .flags = @truncate(PTE_V),
+            .ppn = @truncate(pt0 >> PAGE_SHIFT),
+            .reserved = 0,
+        };
+    }
+
+    const pt0 = @as([*]PageTableEntry, @ptrFromInt((pte1.ppn << PAGE_SHIFT)))[0..512];
+    const pte0 = &pt0[vpn0];
+
+    // Create leaf PTE
+    pte0.* = PageTableEntry{
+        .flags = @truncate(flags),
+        .ppn = @truncate(paddr >> PAGE_SHIFT),
+        .reserved = 0,
+    };
+}
+
+fn allocate_page() u64 {
+    if (next_free_page >= page_pool.len / PAGE_SIZE) {
+        panic("Out of pages for page tables", .{}, @src());
+    }
+
+    const page_addr = @intFromPtr(&page_pool[next_free_page * PAGE_SIZE]);
+    next_free_page += 1;
+
+    // Clear the page
+    @memset(@as([*]u8, @ptrFromInt(page_addr))[0..PAGE_SIZE], 0);
+
+    return page_addr;
+}

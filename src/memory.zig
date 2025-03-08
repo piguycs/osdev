@@ -11,6 +11,10 @@ const PAGE_SIZE = 4096;
 const MEM_SIZE = 64 * 1024 * 1024; // 64M
 const MEM_END = 0x80200000 + MEM_SIZE;
 
+// PCI memory regions
+const PCI_MEM_START = 0x40000000;
+const PCI_MEM_SIZE = 32 * 1024 * 1024; // 32M for framebuffer and MMIO
+
 pub const FreeList = struct {
     next: ?*FreeList,
 };
@@ -29,7 +33,11 @@ pub const KAlloc = struct {
             .lock = sync.Lock.new("kmem"),
         };
 
+        // Map kernel memory
         kmem.freeRange(@intFromPtr(&end), MEM_END);
+
+        // Map PCI memory regions
+        kmem.freeRange(PCI_MEM_START, PCI_MEM_START + PCI_MEM_SIZE);
 
         return kmem;
     }

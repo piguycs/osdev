@@ -1,0 +1,259 @@
+// THIS IS AI FUCKERY, BE CAREFUL, DO NOT TOUCH UNTIL REVISED
+
+const std = @import("std");
+const bochs = @import("bochs_display.zig");
+const writer = @import("writer.zig");
+const panic = writer.panic;
+const cprintln = writer.println;
+
+pub const Color = struct {
+    r: u8,
+    g: u8,
+    b: u8,
+    a: u8 = 255,
+
+    pub const White = Color{ .r = 255, .g = 255, .b = 255 };
+    pub const Black = Color{ .r = 0, .g = 0, .b = 0 };
+    pub const Red = Color{ .r = 255, .g = 0, .b = 0 };
+    pub const Green = Color{ .r = 0, .g = 255, .b = 0 };
+    pub const Blue = Color{ .r = 0, .g = 0, .b = 255 };
+};
+
+const FONT_WIDTH = 8;
+const FONT_HEIGHT = 8;
+const FONT_SIZE = 8; // bytes per character
+const FONT_CHARS = 62; // A-Z (26) + a-z (26) + 0-9 (10)
+
+// Font data storage
+var font_buffer: [FONT_SIZE * FONT_CHARS]u8 align(16) = undefined;
+
+// Basic 8x8 font data for numbers and letters only
+const font_data = [_]u8{
+    // 0-9 (48-57 in ASCII)
+    0x7C, 0xC6, 0xCE, 0xD6, 0xE6, 0xC6, 0x7C, 0x00, // 0
+    0x18, 0x38, 0x18, 0x18, 0x18, 0x18, 0x7E, 0x00, // 1
+    0x7C, 0xC6, 0x06, 0x1C, 0x30, 0x66, 0xFE, 0x00, // 2
+    0x7C, 0xC6, 0x06, 0x3C, 0x06, 0xC6, 0x7C, 0x00, // 3
+    0x1C, 0x3C, 0x6C, 0xCC, 0xFE, 0x0C, 0x1E, 0x00, // 4
+    0xFE, 0xC0, 0xC0, 0xFC, 0x06, 0xC6, 0x7C, 0x00, // 5
+    0x38, 0x60, 0xC0, 0xFC, 0xC6, 0xC6, 0x7C, 0x00, // 6
+    0xFE, 0xC6, 0x0C, 0x18, 0x30, 0x30, 0x30, 0x00, // 7
+    0x7C, 0xC6, 0xC6, 0x7C, 0xC6, 0xC6, 0x7C, 0x00, // 8
+    0x7C, 0xC6, 0xC6, 0x7E, 0x06, 0x0C, 0x78, 0x00, // 9
+
+    // A-Z (65-90 in ASCII)
+    0x38, 0x6C, 0xC6, 0xFE, 0xC6, 0xC6, 0xC6, 0x00, // A
+    0xFC, 0x66, 0x66, 0x7C, 0x66, 0x66, 0xFC, 0x00, // B
+    0x3C, 0x66, 0xC0, 0xC0, 0xC0, 0x66, 0x3C, 0x00, // C
+    0xF8, 0x6C, 0x66, 0x66, 0x66, 0x6C, 0xF8, 0x00, // D
+    0xFE, 0x62, 0x68, 0x78, 0x68, 0x62, 0xFE, 0x00, // E
+    0xFE, 0x62, 0x68, 0x78, 0x68, 0x60, 0xF0, 0x00, // F
+    0x3C, 0x66, 0xC0, 0xC0, 0xCE, 0x66, 0x3E, 0x00, // G
+    0xC6, 0xC6, 0xC6, 0xFE, 0xC6, 0xC6, 0xC6, 0x00, // H
+    0x3C, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00, // I
+    0x1E, 0x0C, 0x0C, 0x0C, 0xCC, 0xCC, 0x78, 0x00, // J
+    0xE6, 0x66, 0x6C, 0x78, 0x6C, 0x66, 0xE6, 0x00, // K
+    0xF0, 0x60, 0x60, 0x60, 0x62, 0x66, 0xFE, 0x00, // L
+    0xC6, 0xEE, 0xFE, 0xFE, 0xD6, 0xC6, 0xC6, 0x00, // M
+    0xC6, 0xE6, 0xF6, 0xDE, 0xCE, 0xC6, 0xC6, 0x00, // N
+    0x38, 0x6C, 0xC6, 0xC6, 0xC6, 0x6C, 0x38, 0x00, // O
+    0xFC, 0x66, 0x66, 0x7C, 0x60, 0x60, 0xF0, 0x00, // P
+    0x7C, 0xC6, 0xC6, 0xC6, 0xD6, 0x7C, 0x0E, 0x00, // Q
+    0xFC, 0x66, 0x66, 0x7C, 0x6C, 0x66, 0xE6, 0x00, // R
+    0x7C, 0xC6, 0xE0, 0x7C, 0x06, 0xC6, 0x7C, 0x00, // S
+    0x7E, 0x5A, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00, // T
+    0xC6, 0xC6, 0xC6, 0xC6, 0xC6, 0xC6, 0x7C, 0x00, // U
+    0xC6, 0xC6, 0xC6, 0xC6, 0x6C, 0x38, 0x10, 0x00, // V
+    0xC6, 0xC6, 0xD6, 0xFE, 0xFE, 0xEE, 0xC6, 0x00, // W
+    0xC6, 0x6C, 0x38, 0x38, 0x38, 0x6C, 0xC6, 0x00, // X
+    0x66, 0x66, 0x66, 0x3C, 0x18, 0x18, 0x3C, 0x00, // Y
+    0xFE, 0xC6, 0x8C, 0x18, 0x32, 0x66, 0xFE, 0x00, // Z
+
+    // a-z (97-122 in ASCII)
+    0x00, 0x00, 0x78, 0x0C, 0x7C, 0xCC, 0x76, 0x00, // a
+    0xE0, 0x60, 0x60, 0x7C, 0x66, 0x66, 0xDC, 0x00, // b
+    0x00, 0x00, 0x78, 0xCC, 0xC0, 0xCC, 0x78, 0x00, // c
+    0x1C, 0x0C, 0x0C, 0x7C, 0xCC, 0xCC, 0x76, 0x00, // d
+    0x00, 0x00, 0x78, 0xCC, 0xFC, 0xC0, 0x78, 0x00, // e
+    0x38, 0x6C, 0x60, 0xF0, 0x60, 0x60, 0xF0, 0x00, // f
+    0x00, 0x00, 0x76, 0xCC, 0xCC, 0x7C, 0x0C, 0xF8, // g
+    0xE0, 0x60, 0x6C, 0x76, 0x66, 0x66, 0xE6, 0x00, // h
+    0x18, 0x00, 0x38, 0x18, 0x18, 0x18, 0x3C, 0x00, // i
+    0x06, 0x00, 0x06, 0x06, 0x06, 0x66, 0x66, 0x3C, // j
+    0xE0, 0x60, 0x66, 0x6C, 0x78, 0x6C, 0xE6, 0x00, // k
+    0x38, 0x18, 0x18, 0x18, 0x18, 0x18, 0x3C, 0x00, // l
+    0x00, 0x00, 0xEC, 0xFE, 0xD6, 0xD6, 0xC6, 0x00, // m
+    0x00, 0x00, 0xDC, 0x66, 0x66, 0x66, 0x66, 0x00, // n
+    0x00, 0x00, 0x78, 0xCC, 0xCC, 0xCC, 0x78, 0x00, // o
+    0x00, 0x00, 0xDC, 0x66, 0x66, 0x7C, 0x60, 0xF0, // p
+    0x00, 0x00, 0x76, 0xCC, 0xCC, 0x7C, 0x0C, 0x1E, // q
+    0x00, 0x00, 0xDC, 0x76, 0x66, 0x60, 0xF0, 0x00, // r
+    0x00, 0x00, 0x7C, 0xC0, 0x78, 0x0C, 0xF8, 0x00, // s
+    0x10, 0x30, 0x7C, 0x30, 0x30, 0x34, 0x18, 0x00, // t
+    0x00, 0x00, 0xCC, 0xCC, 0xCC, 0xCC, 0x76, 0x00, // u
+    0x00, 0x00, 0x66, 0x66, 0x66, 0x3C, 0x18, 0x00, // v
+    0x00, 0x00, 0xC6, 0xD6, 0xD6, 0xFE, 0x6C, 0x00, // w
+    0x00, 0x00, 0xC6, 0x6C, 0x38, 0x6C, 0xC6, 0x00, // x
+    0x00, 0x00, 0xCC, 0xCC, 0xCC, 0x7C, 0x0C, 0xF8, // y
+    0x00, 0x00, 0xFC, 0x98, 0x30, 0x64, 0xFC, 0x00, // z
+};
+
+pub const Display = struct {
+    device: *bochs.BochsDisplay,
+    width: u32,
+    height: u32,
+    fg_color: Color,
+    bg_color: Color,
+    cursor_x: u32 = 0,
+    cursor_y: u32 = 0,
+    framebuffer: [*]volatile u8 = undefined,
+
+    pub fn init() Display {
+        const DISPLAY_DEBUG = true;
+
+        // Initialize font buffer
+        cprintln("Initializing font buffer...", .{});
+        @memcpy(&font_buffer, &font_data);
+
+        if (bochs.BochsDisplay.init(DISPLAY_DEBUG)) |*display| {
+            // Start with a basic VGA-compatible mode
+            display.*.set_mode(bochs.DisplayMode{
+                .width = 640,
+                .height = 480,
+                .bpp = 32,
+                .enabled = true,
+                .virtual_width = 640,
+                .virtual_height = 480,
+            }, DISPLAY_DEBUG);
+
+            return Display{
+                .device = display.*,
+                .width = 640,
+                .height = 480,
+                .fg_color = Color.White,
+                .bg_color = Color.Black,
+                .framebuffer = display.*.get_framebuffer(),
+            };
+        } else |err| {
+            panic("Failed to initialize Bochs display: {}", .{err}, @src());
+        }
+    }
+
+    pub fn clear(self: *Display) void {
+        cprintln("Clear display: width={}, height={}, bpp=32", .{ self.width, self.height });
+        cprintln("Framebuffer at 0x{x}", .{@intFromPtr(self.framebuffer)});
+
+        const bytes_per_pixel = 4;
+        const stride = self.width * bytes_per_pixel;
+        var y: u32 = 0;
+        while (y < self.height) : (y += 1) {
+            const row_offset = y * stride;
+            var x: u32 = 0;
+            while (x < self.width) : (x += 1) {
+                const pixel_offset = row_offset + (x * bytes_per_pixel);
+                // Write pixel data in little-endian order (BGRA)
+                self.framebuffer[pixel_offset + 0] = self.bg_color.b;
+                self.framebuffer[pixel_offset + 1] = self.bg_color.g;
+                self.framebuffer[pixel_offset + 2] = self.bg_color.r;
+                self.framebuffer[pixel_offset + 3] = self.bg_color.a;
+            }
+        }
+        self.cursor_x = 0;
+        self.cursor_y = 0;
+    }
+
+    pub fn putPixel(self: *Display, x: u32, y: u32, color: Color) void {
+        if (x >= self.width or y >= self.height) return;
+
+        const offset = (y * self.width + x) * 4;
+        self.framebuffer[offset] = color.b;
+        self.framebuffer[offset + 1] = color.g;
+        self.framebuffer[offset + 2] = color.r;
+        self.framebuffer[offset + 3] = color.a;
+    }
+
+    pub fn putChar(self: *Display, c: u8) void {
+        if (c == '\n') {
+            self.cursor_x = 0;
+            self.cursor_y += FONT_HEIGHT;
+            if (self.cursor_y + FONT_HEIGHT > self.height) {
+                self.scroll();
+            }
+            return;
+        }
+
+        // Convert ASCII to our font index
+        var font_index: u8 = undefined;
+        if (c >= '0' and c <= '9') {
+            font_index = c - '0';
+        } else if (c >= 'A' and c <= 'Z') {
+            font_index = (c - 'A') + 10; // After numbers
+        } else if (c >= 'a' and c <= 'z') {
+            font_index = (c - 'a') + 36; // After uppercase
+        } else {
+            return; // Skip unsupported characters
+        }
+
+        const font_offset = font_index * FONT_SIZE;
+        var y: u32 = 0;
+        while (y < FONT_HEIGHT) : (y += 1) {
+            const row = font_buffer[font_offset + y];
+            var x: u32 = 0;
+            while (x < FONT_WIDTH) : (x += 1) {
+                const shift: u3 = @truncate(7 - x);
+                const pixel = (row >> shift) & 1;
+                const color = if (pixel == 1) self.fg_color else self.bg_color;
+                self.putPixel(self.cursor_x + x, self.cursor_y + y, color);
+            }
+        }
+
+        self.cursor_x += FONT_WIDTH;
+        if (self.cursor_x + FONT_WIDTH > self.width) {
+            self.cursor_x = 0;
+            self.cursor_y += FONT_HEIGHT;
+            if (self.cursor_y + FONT_HEIGHT > self.height) {
+                self.scroll();
+            }
+        }
+    }
+
+    pub fn print(self: *Display, text: []const u8) void {
+        for (text) |c| {
+            self.putChar(c);
+        }
+    }
+
+    pub fn println(self: *Display, text: []const u8) void {
+        self.print(text);
+        self.putChar('\n');
+    }
+
+    pub fn setColors(self: *Display, fg: Color, bg: Color) void {
+        self.fg_color = fg;
+        self.bg_color = bg;
+    }
+
+    pub fn scroll(self: *Display) void {
+        // Move everything up by one line
+        const line_size = self.width * 4;
+        const scroll_height = self.height - FONT_HEIGHT;
+
+        var y: u32 = 0;
+        while (y < scroll_height) : (y += 1) {
+            const dst = y * line_size;
+            const src = (y + FONT_HEIGHT) * line_size;
+            @memcpy(self.framebuffer[dst .. dst + line_size], self.framebuffer[src .. src + line_size]);
+        }
+
+        // Clear the bottom line
+        y = scroll_height;
+        while (y < self.height) : (y += 1) {
+            var x: u32 = 0;
+            while (x < self.width) : (x += 1) {
+                self.putPixel(x, y, self.bg_color);
+            }
+        }
+
+        self.cursor_y = scroll_height;
+    }
+};

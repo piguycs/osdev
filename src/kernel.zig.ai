@@ -10,6 +10,8 @@ const trap = @import("trap.zig");
 const writer = @import("writer.zig");
 const pci = @import("pci.zig");
 const bochs_display = @import("bochs_display.zig");
+const std = @import("std");
+const display = @import("display.zig");
 
 const print = writer.print;
 const println = writer.println;
@@ -22,6 +24,7 @@ const NCPU = 4;
 
 export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
+var global_display: ?*display.Display = null;
 
 export fn start(hartid: u64, dtb_ptr: u64) void {
     riscv.enable_all_sie();
@@ -55,6 +58,10 @@ export fn kmain() noreturn {
     var alloc = memory.KAlloc.init();
     _ = &alloc; // TODO: use this for processes etc
 
+    // Initialize virtual memory
+    const vm = @import("riscv/vm.zig");
+    vm.init();
+
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
 
@@ -65,27 +72,41 @@ export fn kmain() noreturn {
     // shell.kshell();
     // Initialize PCI and display
     pci.init();
+    // catch |err| {
+    //     panic("Failed to initialize PCI", null, null);
+    //     return;
+    // };
 
-    // Bochs display debugging?
-    const DISPLAY_DEBUG = false;
+    // Initialize display
+    var disp = display.Display.init();
+    // catch |err| {
+    //     panic("Failed to initialize display", null, null);
+    //     return;
+    // };
+    global_display = &disp;
 
-    // Initialize Bochs display
-    if (bochs_display.BochsDisplay.init(DISPLAY_DEBUG)) |*display| {
-        // Start with a basic VGA-compatible mode
-        display.*.set_mode(bochs_display.DisplayMode{
-            .width = 640,
-            .height = 480,
-            .bpp = 32, // Use 32bpp (0x20) as documented in http://wiki.osdev.org/Bochs_VBE_Extensions (BGA versions)
-            .enabled = true,
-            .virtual_width = 640,
-            .virtual_height = 480,
-        }, DISPLAY_DEBUG);
-        println("Display mode set successfully", .{});
-    } else |err| {
-        println("Failed to initialize Bochs display: {}", .{err});
+    // Clear screen and set colors
+    println("Clearing screen...", .{});
+    disp.clear();
+    println("Setting colors...", .{});
+    disp.setColors(display.Color.White, display.Color.Black);
+
+    // Print welcome message
+    println("Printing welcome message...", .{});
+    disp.println("RISCVKernelBooted");
+    disp.println("Display initialized successfully.");
+    disp.println("");
+
+    // Print PCI devices
+    println("Printing PCI devices...", .{});
+    disp.println("PCI Devices:");
+    disp.setColors(display.Color.Green, display.Color.Black);
+    pci.enumerate_devices();
+
+    // Main loop
+    while (true) {
+        asm volatile ("wfi");
     }
-
-    kwait();
 }
 
 export fn kwait() noreturn {
