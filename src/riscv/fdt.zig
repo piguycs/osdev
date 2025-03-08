@@ -14,3 +14,4 @@ pub const Header = packed struct {
         return @byteSwap(self.magic) == 0xd00dfeed;
     }
 };
+// TODO: Artur, check what the fuck an fdt is

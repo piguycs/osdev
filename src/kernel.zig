@@ -62,7 +62,6 @@ export fn kmain() noreturn {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
 
-    // shell.kshell();
     // Initialize PCI and display
     pci.init();
 
@@ -84,6 +83,8 @@ export fn kmain() noreturn {
     } else |err| {
         println("Failed to initialize Bochs display: {}", .{err});
     }
+
+    shell.kshell();
 
     kwait();
 }
