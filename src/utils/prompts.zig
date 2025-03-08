@@ -1,4 +1,4 @@
-const sbi = @import("riscv/sbi.zig");
+const sbi = @import("../riscv/sbi.zig");
 const writer = @import("writer.zig");
 const reader = @import("reader.zig");
 

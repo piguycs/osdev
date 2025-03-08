@@ -1,6 +1,6 @@
-const sbi = @import("riscv/sbi.zig");
-const spinlock = @import("spinlock.zig");
 const std = @import("std");
+const sbi = @import("../riscv/sbi.zig");
+const spinlock = @import("../spinlock.zig");
 const SourceLocation = std.builtin.SourceLocation;
 
 const Reader = std.io.GenericReader(u32, error{}, read_str);
