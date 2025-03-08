@@ -1,6 +1,6 @@
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
-const writer = @import("writer.zig");
+const writer = @import("utils/writer.zig");
 
 const panic = writer.panic;
 const println = writer.println;
