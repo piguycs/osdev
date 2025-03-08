@@ -1,5 +1,5 @@
 const sync = @import("spinlock.zig");
-const writer = @import("writer.zig");
+const writer = @import("utils/writer.zig");
 
 // end of the kernel code (defined in linker.ld)
 extern const end: u8;

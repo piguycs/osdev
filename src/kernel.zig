@@ -1,13 +1,15 @@
 const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
+
+const prompts = @import("utils/prompts.zig");
+const reader = @import("utils/reader.zig");
+const writer = @import("utils/writer.zig");
+const shell = @import("utils/shell.zig");
+
 const memory = @import("memory.zig");
-const prompts = @import("prompts.zig");
-const reader = @import("reader.zig");
-const shell = @import("shell.zig");
 const spinlock = @import("spinlock.zig");
 const trap = @import("trap.zig");
-const writer = @import("writer.zig");
 const pci = @import("pci.zig");
 const bochs_display = @import("bochs_display.zig");
 
