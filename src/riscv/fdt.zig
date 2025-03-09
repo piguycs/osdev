@@ -50,6 +50,7 @@ pub const DeviceInfo = struct {
     reg_base: ?u64,
     reg_size: ?u64,
     status: []const u8,
+    ranges: ?[]const u8,
 };
 
 // Add PCI-specific constants
@@ -338,7 +339,12 @@ fn parseProperty(name: []const u8, data: []const u8) !void {
             }
         }
     } else if (strEql(name, PROP_RANGES)) {
-        // TODO: THIS IS PROBABLY WRONG AND WILL BREAK ON PHYSICAL HARDWARE
+        // Store ranges data in device info
+        if (device_count > 0) {
+            device_buffer[device_count - 1].ranges = data;
+            debugPrint("Stored ranges data of size {}", .{data.len});
+        }
+
         // Check if this is a PCI node
         println("PCI? {d} {s}", .{ device_count, device_buffer[device_count - 1].compatible }); //  sifive,test1sifive,test0syscon
         // Check if PCI_NODE_COMPATIBLE is in the compatible list which is split by commas
@@ -358,6 +364,7 @@ fn parseProperty(name: []const u8, data: []const u8) !void {
             .reg_base = null,
             .reg_size = null,
             .status = "unknown",
+            .ranges = null,
         };
         device_count += 1;
         debugPrint("Found new device: compatible='{s}'", .{data});
@@ -600,6 +607,66 @@ pub fn print_fdt() void {
                 println("    Size: {} bytes", .{size});
             }
             println("    Status: {s}", .{device.status});
+
+            // Print raw compatible string to see if it contains multiple entries
+            println("    Raw Compatible String: ", .{});
+            var compat_iter = std.mem.split(u8, device.compatible, ",");
+            while (compat_iter.next()) |compat| {
+                println("      - {s}", .{compat});
+            }
+
+            // Print all properties for this device
+            println("    Properties:", .{});
+            if (device.reg_base != null or device.reg_size != null) {
+                println("      reg:", .{});
+                println("        base: 0x{x:0>16}", .{device.reg_base.?});
+                println("        size: 0x{x:0>16}", .{device.reg_size.?});
+            }
+
+            // Print ranges property if this is a PCI device
+            if (std.mem.indexOf(u8, device.compatible, PCI_NODE_COMPATIBLE) != null) {
+                println("      ranges:", .{});
+                // Parse and display ranges data
+                if (device.ranges) |ranges| {
+                    var range_idx: usize = 0;
+                    while (range_idx + 24 <= ranges.len) {
+                        const flags = parse32(ranges[range_idx..].ptr);
+                        const pci_addr = parse64(ranges[range_idx + 4 ..].ptr);
+                        const cpu_addr = parse64(ranges[range_idx + 12 ..].ptr);
+                        const size = parse64(ranges[range_idx + 20 ..].ptr);
+
+                        println("        - type: 0x{x:0>8}", .{flags});
+                        println("          pci_addr: 0x{x:0>16}", .{pci_addr});
+                        println("          cpu_addr: 0x{x:0>16}", .{cpu_addr});
+                        println("          size: 0x{x:0>16}", .{size});
+
+                        range_idx += 24;
+                    }
+                }
+            }
+
+            if (device.model != null) {
+                println("      model: {s}", .{device.model.?});
+            }
+            println("      status: {s}", .{device.status});
+        }
+
+        // Print PCI bridge info if found
+        if (pci_bridge) |bridge| {
+            println("\nPCI Host Bridge Configuration:", .{});
+            println("  Config Space:", .{});
+            println("    Base: 0x{x:0>16}", .{bridge.cfg_base});
+            println("    Size: 0x{x:0>16}", .{bridge.cfg_size});
+            println("  Memory Space:", .{});
+            println("    Base: 0x{x:0>16}", .{bridge.mem_base});
+            println("    Size: 0x{x:0>16}", .{bridge.mem_size});
+            if (bridge.io_base != 0) {
+                println("  I/O Space:", .{});
+                println("    Base: 0x{x:0>16}", .{bridge.io_base});
+                println("    Size: 0x{x:0>16}", .{bridge.io_size});
+            }
+        } else {
+            println("\nNo PCI Host Bridge found", .{});
         }
     } else {
         println("No FDT header found", .{});
@@ -685,6 +752,12 @@ fn parsePCIRanges(data: []const u8) void {
                 }
             }
         }
+    }
+
+    // Emulated bridge, doesn't always have the correct range
+    if (bridge.cfg_base == 0 or bridge.cfg_base == 0x80000000) {
+        debugPrint("[VIRT] Overriding PCI config base to 0x30000000\n", .{});
+        bridge.cfg_base = 0x30000000;
     }
 
     if (bridge.cfg_base != 0 and bridge.cfg_size != 0) {
