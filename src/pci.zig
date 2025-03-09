@@ -133,7 +133,7 @@ pub fn init() void {
 
     // Get PCI configuration from FDT
     if (fdt.getPCIHostBridge()) |bridge| {
-        PCI_CONFIG_BASE = bridge.cfg_base;
+        PCI_CONFIG_BASE = 0x30000000; //bridge.cfg_base;
         PCI_CONFIG_SIZE = bridge.cfg_size;
         PCI_MEM_BASE = bridge.mem_base;
         PCI_MEM_SIZE = bridge.mem_size;
