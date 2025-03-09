@@ -1,25 +1,19 @@
 const std = @import("std");
 
 pub const QEMU_OPTS = .{
-    "qemu-system-riscv64", //"-nographic",
-    "-machine",
-    "virt",
-    "-smp",
-    "4",
+    "qemu-system-riscv64", "-nographic",
+    "-machine",            "virt",
+    "-smp",                "4",
     // This means it will use OpenSBI
-    "-bios",
-    "default",
-    "-kernel",
-    "zig-out/bin/kernel",
+    "-bios",               "default",
+    "-kernel",             "zig-out/bin/kernel",
     // serial output + console gets stored in a logfile
-    "-chardev",
-    "stdio,id=char0,mux=on,logfile=zig-out/serial.log,signal=on",
-    "-serial",
-    "chardev:char0",
+    "-chardev",            "stdio,id=char0,mux=on,logfile=zig-out/serial.log,signal=on",
+    "-serial",             "chardev:char0",
     "-mon",
     "chardev=char0",
-    "-device",
-    "bochs-display",
+    // "-device",
+    // "bochs-display",
 };
 
 pub const QEMU_DBG = QEMU_OPTS ++ .{ "-s", "-S" };

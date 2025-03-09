@@ -49,13 +49,37 @@ fn start_stuf(_: []const u8) void {
 }
 
 export fn kmain() noreturn {
-    println("\nhello from kmain\n", .{});
+    println("Initializing kernel...", .{});
 
     trap.init();
     writer.init();
 
+    // Initialize FDT
+    if (fdt_header_addr) |header| {
+        fdt.init(header) catch |err| {
+            println("Failed to initialize FDT: {}", .{err});
+            panic("FDT initialization failed", .{}, @src());
+        };
+
+        // Log memory information
+        const total_mem = fdt.getTotalMemory();
+        const max_addr = fdt.getMaxMemoryAddress();
+        println("Total memory: {} MB", .{total_mem / (1024 * 1024)});
+        println("Maximum memory address: 0x{x}", .{max_addr});
+
+        // Log memory regions
+        for (fdt.getMemoryRegions()) |region| {
+            println("Memory region: base=0x{x} size={} MB", .{
+                region.base,
+                region.size / (1024 * 1024),
+            });
+        }
+    } else {
+        panic("No FDT header available", .{}, @src());
+    }
+
     var alloc = memory.KAlloc.init();
-    _ = &alloc; // TODO: use this for processes etc
+    _ = &alloc;
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
@@ -90,7 +114,7 @@ export fn kmain() noreturn {
         display.*.test_pattern();
 
         // Run the improved animation
-        display.*.animate_circle();
+        // display.*.animate_circle();
 
         println("Test pattern complete", .{});
     } else |err| {
