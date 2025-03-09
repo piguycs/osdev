@@ -24,11 +24,11 @@ fn strStartsWith(str: []const u8, prefix: []const u8) bool {
 pub const FDT_MAGIC: u32 = 0xd00dfeed;
 
 // FDT Token types
-const FDT_BEGIN_NODE: u32 = 0x1;
-const FDT_END_NODE: u32 = 0x2;
-const FDT_PROP: u32 = 0x3;
-const FDT_NOP: u32 = 0x4;
-const FDT_END: u32 = 0x9;
+const FDT_BEGIN_NODE: u32 = 1;
+const FDT_END_NODE: u32 = 2;
+const FDT_PROP: u32 = 3;
+const FDT_NOP: u32 = 4;
+const FDT_END: u32 = 9;
 
 // Common property names
 const PROP_REG: []const u8 = "reg";
@@ -51,6 +51,25 @@ pub const DeviceInfo = struct {
     reg_size: ?u64,
     status: []const u8,
 };
+
+// Add PCI-specific constants
+const PCI_NODE_COMPATIBLE: []const u8 = "sifive";
+const PCI_NODE_RANGES: []const u8 = "ranges";
+
+pub const PCIHostBridge = struct {
+    cfg_base: u64,
+    cfg_size: u64,
+    io_base: u64,
+    io_size: u64,
+    mem_base: u64,
+    mem_size: u64,
+};
+
+var pci_bridge: ?PCIHostBridge = null;
+
+pub fn getPCIHostBridge() ?PCIHostBridge {
+    return pci_bridge;
+}
 
 // FDT Header structure
 pub const Header = struct {
@@ -146,6 +165,8 @@ var node_path_buffer: [1024]u8 = undefined;
 var node_path: []u8 = &node_path_buffer;
 var node_path_len: usize = 0;
 
+var debug_enabled: bool = false;
+
 fn updateNodePath(name: []const u8) void {
     // First, ensure we never exceed our buffer size
     const MAX_PATH = 1024;
@@ -155,6 +176,7 @@ fn updateNodePath(name: []const u8) void {
         node_path_len = 0;
         node_path = node_path_buffer[0..0];
         current_node = ROOT_NODE;
+        debugPrint("Reset to root node", .{});
         return;
     }
 
@@ -173,7 +195,7 @@ fn updateNodePath(name: []const u8) void {
 
     // Check if the new path would fit
     if (new_len >= MAX_PATH) {
-        println("Warning: Path too long, truncating", .{});
+        debugPrint("Warning: Path too long, truncating", .{});
         return;
     }
 
@@ -206,18 +228,27 @@ fn updateNodePath(name: []const u8) void {
     node_path = node_path_buffer[0..node_path_len];
     current_node = if (node_path_len == 0) ROOT_NODE else node_path;
 
-    println("Updated path: '{s}'", .{current_node});
+    debugPrint("Updated path: '{s}'", .{current_node});
 }
 
 // Initialize FDT parser with header pointer
-pub fn init(header: *const Header) !void {
+pub fn init(header: *const Header, enable_debug: bool) !void {
+    debug_enabled = enable_debug;
     if (!header.isValid()) {
         return error.InvalidFDT;
     }
     fdt_header = header;
-    println("FDT version {} at 0x{x}", .{ header.getVersion(), @intFromPtr(header) });
+    if (debug_enabled) {
+        println("[FDT] Version {} at 0x{x}", .{ header.getVersion(), @intFromPtr(header) });
+    }
 
     try parseFDT();
+}
+
+fn debugPrint(comptime fmt: []const u8, args: anytype) void {
+    if (debug_enabled) {
+        println("[FDT] " ++ fmt, args);
+    }
 }
 
 // Parse string from strings block
@@ -228,7 +259,7 @@ fn getString(offset: u32) []const u8 {
 
         // Check if offset is within strings section
         if (offset >= strings_size) {
-            println("Error: String offset 0x{x} beyond strings section size 0x{x}", .{ offset, strings_size });
+            debugPrint("Error: String offset 0x{x} beyond strings section size 0x{x}", .{ offset, strings_size });
             return "";
         }
 
@@ -242,7 +273,7 @@ fn getString(offset: u32) []const u8 {
         const MAX_STRING_LEN = 1024;
         while (len < MAX_STRING_LEN) {
             if (@intFromPtr(str) + len >= max_addr) {
-                println("Error: String extends beyond FDT bounds", .{});
+                debugPrint("Error: String extends beyond FDT bounds", .{});
                 return "";
             }
             if (str[len] == 0) break;
@@ -250,7 +281,7 @@ fn getString(offset: u32) []const u8 {
         }
 
         if (len == MAX_STRING_LEN) {
-            println("Error: String too long or missing null terminator", .{});
+            debugPrint("Error: String too long or missing null terminator", .{});
             return "";
         }
 
@@ -261,32 +292,87 @@ fn getString(offset: u32) []const u8 {
 
 // Parse 32-bit big-endian value
 fn parse32(ptr: [*]const u8) u32 {
-    const value = @as(*const u32, @ptrCast(@alignCast(ptr))).*;
-    return @byteSwap(value);
+    // Read raw bytes in correct order for big-endian
+    const b0: u32 = ptr[0];
+    const b1: u32 = ptr[1];
+    const b2: u32 = ptr[2];
+    const b3: u32 = ptr[3];
+    return (b0 << 24) | (b1 << 16) | (b2 << 8) | b3;
 }
 
 // Parse 64-bit big-endian value
 fn parse64(ptr: [*]const u8) u64 {
-    const value = @as(*const u64, @ptrCast(@alignCast(ptr))).*;
-    return @byteSwap(value);
+    // Read raw bytes in correct order for big-endian
+    const b0: u64 = ptr[0];
+    const b1: u64 = ptr[1];
+    const b2: u64 = ptr[2];
+    const b3: u64 = ptr[3];
+    const b4: u64 = ptr[4];
+    const b5: u64 = ptr[5];
+    const b6: u64 = ptr[6];
+    const b7: u64 = ptr[7];
+    return (b0 << 56) | (b1 << 48) | (b2 << 40) | (b3 << 32) |
+        (b4 << 24) | (b5 << 16) | (b6 << 8) | b7;
 }
 
 // Update parseProperty to use our string functions
 fn parseProperty(name: []const u8, data: []const u8) !void {
+    // Handle memory regions
     if (strEql(name, PROP_REG) and data.len >= 16) {
         const base = parse64(data.ptr);
         const size = parse64(data.ptr + 8);
         if (strStartsWith(current_node, "/memory")) {
             if (memory_region_count >= MAX_MEMORY_REGIONS) {
-                println("Warning: Too many memory regions", .{});
+                debugPrint("Warning: Too many memory regions", .{});
                 return;
             }
             memory_region_buffer[memory_region_count] = .{ .base = base, .size = size };
             memory_region_count += 1;
-            println("Found memory region: base=0x{x} size=0x{x}", .{ base, size });
+            debugPrint("Found memory region: base=0x{x} size=0x{x}", .{ base, size });
+        } else if (device_count < MAX_DEVICES) {
+            // If we're not in a memory node, this might be a device's register
+            if (device_count > 0) { // Update the last device's reg info
+                device_buffer[device_count - 1].reg_base = base;
+                device_buffer[device_count - 1].reg_size = size;
+                debugPrint("Updated device register info: base=0x{x} size=0x{x}", .{ base, size });
+            }
         }
+    } else if (strEql(name, PROP_RANGES)) {
+        // TODO: THIS IS PROBABLY WRONG AND WILL BREAK ON PHYSICAL HARDWARE
+        // Check if this is a PCI node
+        println("PCI? {d} {s}", .{ device_count, device_buffer[device_count - 1].compatible }); //  sifive,test1sifive,test0syscon
+        // Check if PCI_NODE_COMPATIBLE is in the compatible list which is split by commas
+        if (device_count > 0 and std.mem.indexOf(u8, device_buffer[device_count - 1].compatible, PCI_NODE_COMPATIBLE) != null) {
+            println("PCI found", .{});
+            parsePCIRanges(data);
+        }
+    } else if (strEql(name, PROP_COMPATIBLE)) {
+        // Start a new device entry when we find a compatible property
+        if (device_count >= MAX_DEVICES) {
+            debugPrint("Warning: Too many devices", .{});
+            return;
+        }
+        device_buffer[device_count] = .{
+            .compatible = data,
+            .model = null,
+            .reg_base = null,
+            .reg_size = null,
+            .status = "unknown",
+        };
+        device_count += 1;
+        debugPrint("Found new device: compatible='{s}'", .{data});
+    } else if (strEql(name, PROP_MODEL) and device_count > 0) {
+        device_buffer[device_count - 1].model = data;
+        debugPrint("Updated device model: '{s}'", .{data});
+    } else if (strEql(name, PROP_STATUS) and device_count > 0) {
+        device_buffer[device_count - 1].status = data;
+        debugPrint("Updated device status: '{s}'", .{data});
     }
-    println("Property: '{s}'", .{name});
+
+    // Debug output for all properties
+    if (debug_enabled) {
+        debugPrint("Property: '{s}' at node '{s}'", .{ name, current_node });
+    }
 }
 
 // Parse entire FDT structure
@@ -306,20 +392,20 @@ fn parseFDT() !void {
             struct_offset + struct_size > total_size or
             strings_offset + strings_size > total_size)
         {
-            println("Error: Invalid FDT offsets or sizes", .{});
+            debugPrint("Error: Invalid FDT offsets or sizes", .{});
             return error.InvalidFDT;
         }
 
         const end = ptr + struct_size;
         const base_addr = @intFromPtr(header);
-        const max_addr = base_addr + total_size;
+        const max_addr: u64 = @as(u64, base_addr) + total_size;
 
-        println("Starting FDT parse at 0x{x}, end at 0x{x}, total size 0x{x}", .{ @intFromPtr(ptr), @intFromPtr(end), total_size });
+        debugPrint("Starting parse at 0x{x}, end at 0x{x}, total size 0x{x}", .{ @intFromPtr(ptr), @intFromPtr(end), total_size });
 
         while (@intFromPtr(ptr) < @intFromPtr(end)) {
             // Check if we're still within bounds
             if (@intFromPtr(ptr) + 4 > max_addr) {
-                println("Error: FDT parse went out of bounds", .{});
+                debugPrint("Error: Parse went out of bounds", .{});
                 return error.InvalidFDT;
             }
 
@@ -328,26 +414,17 @@ fn parseFDT() !void {
 
             switch (token) {
                 FDT_BEGIN_NODE => {
-                    // Debug the raw bytes
-                    println("BEGIN_NODE at 0x{x}: ", .{@intFromPtr(ptr)});
+                    debugPrint("BEGIN_NODE at 0x{x}", .{@intFromPtr(ptr)});
 
                     // Create a local buffer for the node name
                     var name_buffer: [256]u8 = undefined;
                     var len: usize = 0;
                     const MAX_NODE_NAME = 256;
 
-                    // Print raw bytes for debugging
-                    print("Raw bytes: ", .{});
-                    var debug_i: usize = 0;
-                    while (debug_i < 32 and @intFromPtr(ptr) + debug_i < max_addr) : (debug_i += 1) {
-                        print("{x:0>2} ", .{ptr[debug_i]});
-                    }
-                    println("", .{});
-
                     // Safely read the node name into our buffer
                     while (len < MAX_NODE_NAME) {
                         if (@intFromPtr(ptr) + len >= max_addr) {
-                            println("Error: Node name extends beyond FDT bounds", .{});
+                            debugPrint("Error: Node name extends beyond bounds", .{});
                             return error.InvalidFDT;
                         }
                         if (ptr[len] == 0) break;
@@ -356,7 +433,7 @@ fn parseFDT() !void {
                     }
 
                     if (len == MAX_NODE_NAME) {
-                        println("Error: Node name too long or missing null terminator", .{});
+                        debugPrint("Error: Node name too long or missing null terminator", .{});
                         return error.InvalidFDT;
                     }
 
@@ -364,34 +441,32 @@ fn parseFDT() !void {
                     const node_name = if (len == 0) "" else name_buffer[0..len];
 
                     // Debug output
-                    println("Node name length: {}, content: '{s}'", .{ len, node_name });
+                    debugPrint("Node name length: {}, content: '{s}'", .{ len, node_name });
 
                     // Update the path with our validated node name
                     updateNodePath(node_name);
-                    println("Node: '{s}'", .{current_node});
+                    debugPrint("Node: '{s}'", .{current_node});
 
                     // Calculate the next aligned position first
-                    const next_ptr = @intFromPtr(ptr) + len + 1; // Skip name and null terminator
+                    const next_ptr = @intFromPtr(ptr) + len + 1;
                     const aligned_next = (next_ptr + 3) & ~@as(usize, 3);
 
                     // Validate the alignment won't go out of bounds
                     if (aligned_next > max_addr) {
-                        println("Error: Alignment would go beyond FDT bounds", .{});
+                        debugPrint("Error: Alignment would go beyond bounds", .{});
                         return error.InvalidFDT;
                     }
 
                     // Only advance the pointer after validation
                     ptr = @as([*]const u8, @ptrFromInt(aligned_next));
-
-                    // Debug the pointer advancement
-                    println("Advanced to aligned address: 0x{x}", .{@intFromPtr(ptr)});
+                    debugPrint("Advanced to aligned address: 0x{x}", .{@intFromPtr(ptr)});
                 },
                 FDT_END_NODE => {
-                    println("END_NODE: '{s}'", .{current_node});
-                    // Pop the last component from the path
+                    debugPrint("END_NODE: '{s}'", .{current_node});
+
                     if (strEql(current_node, ROOT_NODE)) {
-                        // Already at root, nothing to pop
-                        return error.InvalidFDT;
+                        debugPrint("At root node, continuing...", .{});
+                        continue;
                     }
 
                     // Find the last '/'
@@ -414,45 +489,56 @@ fn parseFDT() !void {
                         node_path = node_path_buffer[0..0];
                         current_node = ROOT_NODE;
                     }
-                    println("Popped to: '{s}'", .{current_node});
+                    debugPrint("Popped to: '{s}'", .{current_node});
                 },
                 FDT_PROP => {
                     // Check if we can read the property header
                     if (@intFromPtr(ptr) + 8 > max_addr) {
-                        println("Error: Property header extends beyond FDT bounds", .{});
+                        debugPrint("Error: Property header extends beyond bounds", .{});
                         return error.InvalidFDT;
                     }
 
+                    debugPrint("PROP at 0x{x}", .{@intFromPtr(ptr)});
+
                     const len = parse32(ptr);
+                    debugPrint("Property length: 0x{x}", .{len});
+
+                    // Sanity check the length
+                    if (len > 1024 * 1024) { // Max 1MB for any property
+                        debugPrint("Error: Property length too large: 0x{x}", .{len});
+                        return error.InvalidFDT;
+                    }
+
                     ptr += 4;
                     const nameoff = parse32(ptr);
                     ptr += 4;
 
                     // Check if property data fits within bounds
                     if (@intFromPtr(ptr) + len > max_addr) {
-                        println("Error: Property data extends beyond FDT bounds", .{});
+                        debugPrint("Error: Property data extends beyond bounds", .{});
                         return error.InvalidFDT;
                     }
 
                     const name = getString(nameoff);
                     const data = ptr[0..len];
                     try parseProperty(name, data);
+
                     ptr += len;
                     // Align to 4 bytes
                     const aligned_ptr = (@intFromPtr(ptr) + 3) & ~@as(usize, 3);
                     if (aligned_ptr > max_addr) {
-                        println("Error: Alignment went beyond FDT bounds", .{});
+                        debugPrint("Error: Alignment would go beyond bounds", .{});
                         return error.InvalidFDT;
                     }
                     ptr = @as([*]const u8, @ptrFromInt(aligned_ptr));
                 },
                 FDT_END => {
-                    println("END token found", .{});
+                    debugPrint("END token found", .{});
                     break;
                 },
                 FDT_NOP => {},
                 else => {
-                    println("Error: Unknown FDT token: 0x{x} at offset 0x{x}", .{ token, @intFromPtr(ptr) - @intFromPtr(header) });
+                    debugPrint("Error: Unknown token: 0x{x} at offset 0x{x}", .{ token, @intFromPtr(ptr) - @intFromPtr(header) });
                     return error.InvalidFDT;
                 },
             }
@@ -482,4 +568,132 @@ pub fn getMaxMemoryAddress() u64 {
         if (end > max) max = end;
     }
     return max;
+}
+
+pub fn print_fdt() void {
+    if (fdt_header) |header| {
+        println("FDT Header:", .{});
+        println("  Magic: 0x{x}", .{header.getMagic()});
+        println("  Version: {}", .{header.getVersion()});
+        println("  Total size: {} bytes", .{header.getTotalSize()});
+        println("  Boot CPU ID: {}", .{header.getBootCpuId()});
+        println("\nMemory Regions:", .{});
+        for (memory_region_buffer[0..memory_region_count], 0..) |region, i| {
+            println("  Region {}: 0x{x:0>16} - 0x{x:0>16} ({} bytes)", .{
+                i,
+                region.base,
+                region.base + region.size,
+                region.size,
+            });
+        }
+        println("\nDevices:", .{});
+        for (device_buffer[0..device_count], 0..) |device, i| {
+            println("  Device {}:", .{i});
+            println("    Compatible: {s}", .{device.compatible});
+            if (device.model) |model| {
+                println("    Model: {s}", .{model});
+            }
+            if (device.reg_base) |base| {
+                println("    Base Address: 0x{x:0>16}", .{base});
+            }
+            if (device.reg_size) |size| {
+                println("    Size: {} bytes", .{size});
+            }
+            println("    Status: {s}", .{device.status});
+        }
+    } else {
+        println("No FDT header found", .{});
+    }
+}
+
+fn parsePCIRanges(data: []const u8) void {
+    if (data.len < 24) { // Need at least 3 entries of 8 bytes each
+        debugPrint("PCI ranges data too short", .{});
+        return;
+    }
+
+    // PCI ranges format:
+    // For each entry:
+    // - flags (4 bytes) - type and space identifier
+    // - pci_addr (8 bytes)
+    // - cpu_addr (8 bytes)
+    // - size (8 bytes)
+
+    var i: usize = 0;
+    var bridge = PCIHostBridge{
+        .cfg_base = 0,
+        .cfg_size = 0,
+        .io_base = 0,
+        .io_size = 0,
+        .mem_base = 0,
+        .mem_size = 0,
+    };
+
+    while (i + 24 <= data.len) {
+        const flags = parse32(data[i..].ptr);
+        const pci_addr = parse64(data[i + 4 ..].ptr);
+        const cpu_addr = parse64(data[i + 12 ..].ptr);
+        const size = parse64(data[i + 20 ..].ptr);
+
+        debugPrint("PCI range - flags: 0x{x}, pci_addr: 0x{x}, cpu_addr: 0x{x}, size: 0x{x}", .{
+            flags,
+            pci_addr,
+            cpu_addr,
+            size,
+        });
+
+        const range_type = flags & 0x03000000;
+        const space = flags & 0x03;
+
+        switch (range_type) {
+            0x01000000 => { // IO space
+                bridge.io_base = cpu_addr;
+                bridge.io_size = size;
+            },
+            0x02000000 => { // 32-bit memory space
+                bridge.mem_base = cpu_addr;
+                bridge.mem_size = size;
+            },
+            0x03000000 => { // 64-bit memory space
+                bridge.mem_base = cpu_addr;
+                bridge.mem_size = size;
+            },
+            0x00000000 => { // Configuration space
+                if (space == 0x02) { // Type 1 configuration space
+                    bridge.cfg_base = cpu_addr;
+                    bridge.cfg_size = size;
+                }
+            },
+            else => {
+                debugPrint("Unknown PCI range type: 0x{x}", .{flags});
+            },
+        }
+
+        i += 24;
+    }
+
+    // Look for config space in reg property if not found in ranges
+    if (bridge.cfg_base == 0) {
+        for (device_buffer[0..device_count]) |device| {
+            if (std.mem.indexOf(u8, device_buffer[device_count - 1].compatible, PCI_NODE_COMPATIBLE) != null) {
+                if (device.reg_base) |base| {
+                    bridge.cfg_base = base;
+                    if (device.reg_size) |size| {
+                        bridge.cfg_size = size;
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    if (bridge.cfg_base != 0 and bridge.cfg_size != 0) {
+        debugPrint("Found PCI host bridge - cfg: 0x{x} (size: 0x{x}), mem: 0x{x} (size: 0x{x})", .{
+            bridge.cfg_base,
+            bridge.cfg_size,
+            bridge.mem_base,
+            bridge.mem_size,
+        });
+        pci_bridge = bridge;
+    }
 }

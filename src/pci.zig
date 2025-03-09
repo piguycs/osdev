@@ -76,12 +76,19 @@
 //               - 0xbebebebe indicates big endian.
 //               - 0x1e1e1e1e indicates little endian.
 
-// PCI Configuration Space constants for RISC-V virt machine
-const PCI_CONFIG_BASE: u64 = 0x30000000;
-const PCI_INVALID_VENDOR: u16 = 0xFFFF;
+const fdt = @import("riscv/fdt.zig");
+const writer = @import("utils/writer.zig");
+const println = writer.println;
 
-// PCIe MMCONFIG typically starts here
-const PCIE_MMCONFIG_BASE: u64 = 0xE0000000;
+// PCI Configuration Space constants
+var PCI_CONFIG_BASE: u64 = undefined;
+var PCI_CONFIG_SIZE: u64 = undefined;
+var PCI_MEM_BASE: u64 = undefined;
+var PCI_MEM_SIZE: u64 = undefined;
+var PCI_IO_BASE: u64 = undefined;
+var PCI_IO_SIZE: u64 = undefined;
+
+const PCI_INVALID_VENDOR: u16 = 0xFFFF;
 
 pub const PCIDeviceInfo = struct {
     vendor_id: u16,
@@ -121,56 +128,29 @@ pub const PCI_BAR_IO_SPACE: u1 = 0x1; // If bit 0 is 1, it's an I/O BAR
 pub const PCI_BAR_TYPE_64: u2 = 0x2; // If bits [2:1] = 2, it's a 64-bit BAR
 pub const PCI_BAR_PREFETCH: u1 = 0x8; // If bit 3 is 1, memory is prefetchable
 
-/// Get the base address and size of a PCI BAR
-pub fn get_bar_info(bus: u8, device: u8, function: u8, bar_num: u8) struct { base: u64, size: u64 } {
-    const bar_offset = PCI_BAR0 + (bar_num * 4);
-
-    // Read the original BAR value
-    const orig_bar = read_config(bus, device, function, bar_offset);
-
-    // Write all 1s to get the size mask
-    write_config(bus, device, function, bar_offset, 0xFFFFFFFF);
-    const size_mask = read_config(bus, device, function, bar_offset);
-
-    // Restore the original value
-    write_config(bus, device, function, bar_offset, orig_bar);
-
-    const is_io = (orig_bar & 1) == 1;
-    const is_64bit = !is_io and ((orig_bar >> 1) & 0x3) == 0x2;
-
-    var base: u64 = undefined;
-    var size: u64 = undefined;
-
-    if (is_io) {
-        // I/O BAR
-        base = orig_bar & 0xFFFFFFFC;
-        size = ~(size_mask & 0xFFFFFFFC) + 1;
-    } else {
-        // Memory BAR
-        base = orig_bar & 0xFFFFFFF0;
-        if (is_64bit) {
-            // Read the high 32 bits
-            const orig_bar_high = read_config(bus, device, function, bar_offset + 4);
-            base |= @as(u64, orig_bar_high) << 32;
-
-            // Get size (write all 1s to high part too)
-            write_config(bus, device, function, bar_offset + 4, 0xFFFFFFFF);
-            const size_mask_high = read_config(bus, device, function, bar_offset + 4);
-            write_config(bus, device, function, bar_offset + 4, orig_bar_high);
-
-            size = ~((@as(u64, size_mask_high) << 32) | (size_mask & 0xFFFFFFF0)) + 1;
-        } else {
-            size = ~(size_mask & 0xFFFFFFF0) + 1;
-        }
-    }
-
-    return .{ .base = base, .size = size };
-}
-
 pub fn init() void {
-    const writer = @import("utils/writer.zig");
-    writer.println("Initializing PCI subsystem...", .{});
-    enumerate_devices();
+    println("Initializing PCI subsystem...", .{});
+
+    // Get PCI configuration from FDT
+    if (fdt.getPCIHostBridge()) |bridge| {
+        PCI_CONFIG_BASE = bridge.cfg_base;
+        PCI_CONFIG_SIZE = bridge.cfg_size;
+        PCI_MEM_BASE = bridge.mem_base;
+        PCI_MEM_SIZE = bridge.mem_size;
+        PCI_IO_BASE = bridge.io_base;
+        PCI_IO_SIZE = bridge.io_size;
+
+        println("PCI Host Bridge found:", .{});
+        println("  Config space: 0x{x:0>16} - 0x{x:0>16}", .{ PCI_CONFIG_BASE, PCI_CONFIG_BASE + PCI_CONFIG_SIZE });
+        println("  Memory space: 0x{x:0>16} - 0x{x:0>16}", .{ PCI_MEM_BASE, PCI_MEM_BASE + PCI_MEM_SIZE });
+        if (PCI_IO_BASE != 0) {
+            println("  I/O space: 0x{x:0>16} - 0x{x:0>16}", .{ PCI_IO_BASE, PCI_IO_BASE + PCI_IO_SIZE });
+        }
+
+        enumerate_devices();
+    } else {
+        println("No PCI host bridge found in FDT!", .{});
+    }
 }
 
 fn is_mmconfig_available() bool {
@@ -178,14 +158,14 @@ fn is_mmconfig_available() bool {
 }
 
 pub fn read_config(bus: u8, device: u8, function: u8, register: u8) u32 {
-    if (is_mmconfig_available()) {
-        const mmconfig_addr = PCIE_MMCONFIG_BASE +
-            (@as(u64, bus) << 20) |
-            (@as(u64, device) << 15) |
-            (@as(u64, function) << 12) |
-            @as(u64, register);
-        _ = mmconfig_addr;
-    }
+    // if (is_mmconfig_available()) {
+    //     const mmconfig_addr = PCIE_MMCONFIG_BASE +
+    //         (@as(u64, bus) << 20) |
+    //         (@as(u64, device) << 15) |
+    //         (@as(u64, function) << 12) |
+    //         @as(u64, register);
+    //     _ = mmconfig_addr;
+    // }
 
     const offset = (@as(u64, bus) << 16) |
         (@as(u64, device) << 11) |
@@ -194,18 +174,18 @@ pub fn read_config(bus: u8, device: u8, function: u8, register: u8) u32 {
 
     const addr = PCI_CONFIG_BASE | offset;
     const ptr = @as(*volatile u32, @ptrFromInt(addr));
-    return ptr.*;
+    return ptr.*; // Dies here
 }
 
 pub fn write_config(bus: u8, device: u8, function: u8, register: u8, value: u32) void {
-    if (is_mmconfig_available()) {
-        const mmconfig_addr = PCIE_MMCONFIG_BASE +
-            (@as(u64, bus) << 20) |
-            (@as(u64, device) << 15) |
-            (@as(u64, function) << 12) |
-            @as(u64, register);
-        _ = mmconfig_addr;
-    }
+    // if (is_mmconfig_available()) {
+    //     const mmconfig_addr = PCIE_MMCONFIG_BASE +
+    //         (@as(u64, bus) << 20) |
+    //         (@as(u64, device) << 15) |
+    //         (@as(u64, function) << 12) |
+    //         @as(u64, register);
+    //     _ = mmconfig_addr;
+    // }
 
     const offset = (@as(u64, bus) << 16) |
         (@as(u64, device) << 11) |
@@ -285,7 +265,6 @@ pub fn get_device_info(bus: u8, device: u8, function: u8) PCIDeviceInfo {
 }
 
 fn print_device_info(bus: u8, device: u8, function: u8, info: PCIDeviceInfo) void {
-    const writer = @import("utils/writer.zig");
     writer.println("PCI Device: {x:0>2}:{x:0>2}.{x:0>1}", .{ bus, device, function });
     writer.println("  Vendor ID: {x:0>4}, Device ID: {x:0>4}", .{ info.vendor_id, info.device_id });
     writer.println("  Class: {x:0>2}, Subclass: {x:0>2}, ProgIF: {x:0>2}", .{ info.class_code, info.subclass, info.prog_if });
@@ -358,4 +337,56 @@ pub fn get_device_secondary_bus(bus: u8, device: u8, function: u8) u8 {
     const config_data = read_config(bus, device, function, PCI_SECONDARY_BUS);
     const secondary_bus: u8 = @truncate(config_data >> 8);
     return secondary_bus;
+}
+
+/// Get the base address and size of a PCI BAR
+pub fn get_bar_info(bus: u8, device: u8, function: u8, bar_num: u8) struct { base: u64, size: u64 } {
+    const bar_offset = PCI_BAR0 + (bar_num * 4);
+
+    // Read the original BAR value
+    const orig_bar = read_config(bus, device, function, bar_offset);
+
+    // Write all 1s to get the size mask
+    write_config(bus, device, function, bar_offset, 0xFFFFFFFF);
+    const size_mask = read_config(bus, device, function, bar_offset);
+
+    // Restore the original value
+    write_config(bus, device, function, bar_offset, orig_bar);
+
+    const is_io = (orig_bar & 1) == 1;
+    const is_64bit = !is_io and ((orig_bar >> 1) & 0x3) == 0x2;
+
+    var base: u64 = undefined;
+    var size: u64 = undefined;
+
+    if (is_io) {
+        // I/O BAR
+        const raw_base = orig_bar & 0xFFFFFFFC;
+        size = ~(size_mask & 0xFFFFFFFC) + 1;
+        // Translate I/O address using PCI I/O base
+        base = if (PCI_IO_BASE != 0) PCI_IO_BASE + raw_base else raw_base;
+    } else {
+        // Memory BAR
+        const raw_base = orig_bar & 0xFFFFFFF0;
+        if (is_64bit) {
+            // Read the high 32 bits
+            const orig_bar_high = read_config(bus, device, function, bar_offset + 4);
+            const raw_base_high = @as(u64, orig_bar_high) << 32;
+
+            // Get size (write all 1s to high part too)
+            write_config(bus, device, function, bar_offset + 4, 0xFFFFFFFF);
+            const size_mask_high = read_config(bus, device, function, bar_offset + 4);
+            write_config(bus, device, function, bar_offset + 4, orig_bar_high);
+
+            size = ~((@as(u64, size_mask_high) << 32) | (size_mask & 0xFFFFFFF0)) + 1;
+            // Translate memory address using PCI memory base
+            base = if (PCI_MEM_BASE != 0) PCI_MEM_BASE + raw_base + raw_base_high else raw_base + raw_base_high;
+        } else {
+            size = ~(size_mask & 0xFFFFFFF0) + 1;
+            // Translate memory address using PCI memory base
+            base = if (PCI_MEM_BASE != 0) PCI_MEM_BASE + raw_base else raw_base;
+        }
+    }
+
+    return .{ .base = base, .size = size };
 }

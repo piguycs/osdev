@@ -25,7 +25,7 @@ const NCPU = 4;
 export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
-export fn start(hartid: u64, dtb_ptr: u64) void {
+export fn start(_: u64, dtb_ptr: u64) void {
     riscv.enable_all_sie();
 
     if (fdt_header_addr == null) {
@@ -35,10 +35,10 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
-        println("info: assuming main thread for hart#{any}", .{hartid});
+        // println("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        println("info: assuming second thread for hart#{any}", .{hartid});
+        // println("info: assuming second thread for hart#{any}", .{hartid});
         kwait();
     }
 }
@@ -56,7 +56,7 @@ export fn kmain() noreturn {
 
     // Initialize FDT
     if (fdt_header_addr) |header| {
-        fdt.init(header) catch |err| {
+        fdt.init(header, true) catch |err| {
             println("Failed to initialize FDT: {}", .{err});
             panic("FDT initialization failed", .{}, @src());
         };
