@@ -26,6 +26,11 @@ const shell_commands = [_]ShellCommand{
         .help = "Echo arguments back",
         .handler = cmd_echo,
     },
+    .{
+        .name = "lspci",
+        .help = "List PCI devices",
+        .handler = cmd_lspci,
+    },
 };
 
 fn cmd_help(args: []const []const u8) void {
@@ -42,6 +47,12 @@ fn cmd_echo(args: []const []const u8) void {
         print("{s} ", .{arg});
     }
     println("", .{});
+}
+
+fn cmd_lspci(args: []const []const u8) void {
+    _ = args;
+    const pci = @import("../pci.zig");
+    pci.enumerate_devices();
 }
 
 pub fn shell_command(input: []const u8) void {

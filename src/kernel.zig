@@ -68,7 +68,7 @@ export fn kmain() noreturn {
     pci.init();
 
     // Bochs display debugging?
-    const DISPLAY_DEBUG = false;
+    const DISPLAY_DEBUG = true;
 
     // Initialize Bochs display
     if (bochs_display.BochsDisplay.init(DISPLAY_DEBUG)) |*display| {
@@ -82,6 +82,17 @@ export fn kmain() noreturn {
             .virtual_height = 480,
         }, DISPLAY_DEBUG);
         println("Display mode set successfully", .{});
+
+        // Clear screen to black
+        display.*.clear(bochs_display.Color.Black);
+
+        // Test display
+        display.*.test_pattern();
+
+        // Run the improved animation
+        display.*.animate_circle();
+
+        println("Test pattern complete", .{});
     } else |err| {
         println("Failed to initialize Bochs display: {}", .{err});
     }
