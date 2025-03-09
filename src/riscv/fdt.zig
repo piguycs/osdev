@@ -286,6 +286,7 @@ fn parseProperty(name: []const u8, data: []const u8) !void {
             println("Found memory region: base=0x{x} size=0x{x}", .{ base, size });
         }
     }
+    println("Property: '{s}'", .{name});
 }
 
 // Parse entire FDT structure
