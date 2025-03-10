@@ -172,6 +172,14 @@ fn updateNodePath(name: []const u8) void {
     // First, ensure we never exceed our buffer size
     const MAX_PATH = 1024;
 
+    // Add validation for the input name
+    for (name) |c| {
+        if (c < 32 and c != 0) { // Allow null terminator but catch other control chars
+            debugPrint("Warning: Invalid character in node name, skipping path update", .{});
+            return;
+        }
+    }
+
     if (strEql(name, "")) {
         // Root node
         node_path_len = 0;
@@ -183,53 +191,77 @@ fn updateNodePath(name: []const u8) void {
 
     // Calculate the new path length before making any changes
     var new_len = node_path_len;
-    if (name.len > 0 and name[0] == '/') {
-        // Absolute path
-        new_len = name.len;
-    } else {
-        // Relative path - need to add separator if not at root
-        if (node_path_len > 0 and node_path[node_path_len - 1] != '/') {
-            new_len += 1; // For the '/'
+    if (name.len > 0) {
+        if (name[0] == '/') {
+            // Absolute path
+            new_len = name.len;
+        } else {
+            // Relative path - need to add separator if not at root
+            if (node_path_len > 0 and node_path[node_path_len - 1] != '/') {
+                new_len += 1; // For the '/'
+            }
+            new_len += name.len;
         }
-        new_len += name.len;
     }
 
     // Check if the new path would fit
     if (new_len >= MAX_PATH) {
-        debugPrint("Warning: Path too long, truncating", .{});
+        debugPrint("Warning: Path too long ({d}), truncating", .{new_len});
         return;
     }
 
     // Now safely build the path
-    if (name.len > 0 and name[0] == '/') {
-        // Absolute path
-        node_path_len = 0;
-        if (name.len > MAX_PATH) {
-            @memcpy(node_path_buffer[0..MAX_PATH], name[0..MAX_PATH]);
-            node_path_len = MAX_PATH;
+    var new_path_len: usize = 0;
+    if (name.len > 0) {
+        if (name[0] == '/') {
+            // Absolute path
+            const to_copy = @min(name.len, MAX_PATH);
+            @memcpy(node_path_buffer[0..to_copy], name[0..to_copy]);
+            new_path_len = to_copy;
         } else {
-            @memcpy(node_path_buffer[0..name.len], name);
-            node_path_len = name.len;
-        }
-    } else {
-        // Relative path
-        if (node_path_len > 0 and node_path[node_path_len - 1] != '/') {
-            node_path_buffer[node_path_len] = '/';
-            node_path_len += 1;
-        }
-        const remaining = MAX_PATH - node_path_len;
-        const to_copy = @min(name.len, remaining);
-        if (to_copy > 0) {
-            @memcpy(node_path_buffer[node_path_len..][0..to_copy], name[0..to_copy]);
-            node_path_len += to_copy;
+            // Relative path
+            new_path_len = node_path_len;
+
+            // Add separator if needed
+            if (new_path_len > 0 and node_path_buffer[new_path_len - 1] != '/') {
+                if (new_path_len < MAX_PATH) {
+                    node_path_buffer[new_path_len] = '/';
+                    new_path_len += 1;
+                }
+            }
+
+            // Add new component
+            const remaining = MAX_PATH - new_path_len;
+            const to_copy = @min(name.len, remaining);
+            if (to_copy > 0) {
+                @memcpy(node_path_buffer[new_path_len..][0..to_copy], name[0..to_copy]);
+                new_path_len += to_copy;
+            }
         }
     }
 
-    // Update the slice to reflect the new length
+    // Update the path length and slice
+    node_path_len = new_path_len;
     node_path = node_path_buffer[0..node_path_len];
     current_node = if (node_path_len == 0) ROOT_NODE else node_path;
 
-    debugPrint("Updated path: '{s}'", .{current_node});
+    // Debug output with extra validation
+    if (node_path_len > 0) {
+        var valid = true;
+        for (node_path) |c| {
+            if (c < 32) {
+                valid = false;
+                break;
+            }
+        }
+        if (valid) {
+            debugPrint("Updated path: '{s}'", .{current_node});
+        } else {
+            debugPrint("Warning: Path contains invalid characters", .{});
+        }
+    } else {
+        debugPrint("Path reset to root", .{});
+    }
 }
 
 // Initialize FDT parser with header pointer
@@ -248,6 +280,24 @@ pub fn init(header: *const Header, enable_debug: bool) !void {
 
 fn debugPrint(comptime fmt: []const u8, args: anytype) void {
     if (debug_enabled) {
+        // Validate any string arguments before printing
+        inline for (args) |arg| {
+            const T = @TypeOf(arg);
+            if (T == []const u8) {
+                // Check if string is empty
+                if (arg.len == 0) {
+                    println("[FDT] Warning: Empty string argument in format: {s}", .{fmt});
+                    return;
+                }
+                // Check for invalid characters
+                for (arg) |c| {
+                    if (c < 32 or c > 126) {
+                        println("[FDT] Warning: Invalid character in string argument", .{});
+                        return;
+                    }
+                }
+            }
+        }
         println("[FDT] " ++ fmt, args);
     }
 }
@@ -318,6 +368,12 @@ fn parse64(ptr: [*]const u8) u64 {
 
 // Update parseProperty to use our string functions
 fn parseProperty(name: []const u8, data: []const u8) !void {
+    // Add validation for name
+    if (name.len == 0) {
+        debugPrint("Warning: Empty property name", .{});
+        return;
+    }
+
     // Handle memory regions
     if (strEql(name, PROP_REG) and data.len >= 16) {
         const base = parse64(data.ptr);
@@ -326,8 +382,15 @@ fn parseProperty(name: []const u8, data: []const u8) !void {
         // Add debug output to see what nodes we're processing
         debugPrint("Processing REG property in node '{s}' - base: 0x{x}, size: 0x{x}", .{ current_node, base, size });
 
-        // Check for both "memory" and "memory@" prefixes
-        if (strStartsWith(current_node, "memory") or strStartsWith(current_node, "memory@")) {
+        // Check for memory node more carefully
+        const is_memory_node =
+            (strStartsWith(current_node, "/memory") or strStartsWith(current_node, "memory")) and
+            (strEql(current_node, "/memory") or
+            strEql(current_node, "memory") or
+            strStartsWith(current_node, "/memory@") or
+            strStartsWith(current_node, "memory@"));
+
+        if (is_memory_node) {
             if (memory_region_count >= MAX_MEMORY_REGIONS) {
                 debugPrint("Warning: Too many memory regions", .{});
                 return;
@@ -351,11 +414,14 @@ fn parseProperty(name: []const u8, data: []const u8) !void {
         }
 
         // Check if this is a PCI node
-        println("PCI? {d} {s}", .{ device_count, device_buffer[device_count - 1].compatible }); //  sifive,test1sifive,test0syscon
-        // Check if PCI_NODE_COMPATIBLE is in the compatible list which is split by commas
-        if (device_count > 0 and std.mem.indexOf(u8, device_buffer[device_count - 1].compatible, PCI_NODE_COMPATIBLE) != null) {
-            println("PCI found", .{});
-            parsePCIRanges(data);
+        if (device_count > 0) {
+            const compatible = device_buffer[device_count - 1].compatible;
+            debugPrint("Checking PCI compatibility for device: '{s}'", .{compatible});
+
+            if (std.mem.indexOf(u8, compatible, PCI_NODE_COMPATIBLE) != null) {
+                debugPrint("PCI device found", .{});
+                parsePCIRanges(data);
+            }
         }
     } else if (strEql(name, PROP_COMPATIBLE)) {
         // Start a new device entry when we find a compatible property
@@ -565,27 +631,33 @@ pub fn getMemoryRegions() []const MemoryRegion {
 
 // Get total memory size
 pub fn getTotalMemory() u64 {
-    // Add debug output
-    debugPrint("Calculating total memory from {d} regions", .{memory_region_count});
-
-    var total: u64 = 0;
-    // Add bounds check
-    if (memory_region_count > MAX_MEMORY_REGIONS) {
-        debugPrint("Warning: memory_region_count {d} exceeds MAX_MEMORY_REGIONS", .{memory_region_count});
+    if (memory_region_count == 0 or memory_region_count > MAX_MEMORY_REGIONS) {
         return 0;
     }
 
+    var total: u64 = 0;
     for (memory_region_buffer[0..memory_region_count]) |region| {
-        debugPrint("Adding region: base=0x{x} size=0x{x}", .{ region.base, region.size });
+        // Check for overflow before adding
+        if (total > std.math.maxInt(u64) - region.size) {
+            return total; // Return what we have so far if overflow would occur
+        }
         total += region.size;
     }
     return total;
 }
 
-// Get maximum available memory address
+// Get maximum memory address
 pub fn getMaxMemoryAddress() u64 {
+    if (memory_region_count == 0 or memory_region_count > MAX_MEMORY_REGIONS) {
+        return 0;
+    }
+
     var max: u64 = 0;
     for (memory_region_buffer[0..memory_region_count]) |region| {
+        // Check for overflow before adding
+        if (region.size > std.math.maxInt(u64) - region.base) {
+            continue; // Skip this region if overflow would occur
+        }
         const end = region.base + region.size;
         if (end > max) max = end;
     }
@@ -599,15 +671,56 @@ pub fn print_fdt() void {
         println("  Version: {}", .{header.getVersion()});
         println("  Total size: {} bytes", .{header.getTotalSize()});
         println("  Boot CPU ID: {}", .{header.getBootCpuId()});
-        println("\nMemory Regions:", .{});
-        for (memory_region_buffer[0..memory_region_count], 0..) |region, i| {
-            println("  Region {}: 0x{x:0>16} - 0x{x:0>16} ({} bytes)", .{
-                i,
-                region.base,
-                region.base + region.size,
-                region.size,
-            });
+
+        debugPrint("Starting memory info section", .{});
+        println("\nMemory Info:", .{});
+        println("  Number of regions: {}", .{memory_region_count});
+
+        if (memory_region_count == 0) {
+            println("  No memory regions found", .{});
+            return;
         }
+
+        debugPrint("Printing memory regions", .{});
+        // Print regions first, with safety checks
+        if (memory_region_count <= MAX_MEMORY_REGIONS) {
+            for (memory_region_buffer[0..memory_region_count], 0..) |region, i| {
+                debugPrint("Printing region {}", .{i});
+                println("  Region {}: base=0x{x:0>16} size=0x{x:0>16}", .{ i, region.base, region.size });
+            }
+        }
+
+        debugPrint("Starting total calculation", .{});
+        // Calculate total separately with overflow checking
+        var total: u64 = 0;
+        var overflow = false;
+        for (memory_region_buffer[0..memory_region_count]) |region| {
+            debugPrint("Adding size 0x{x}", .{region.size});
+            // Check for overflow
+            if (total > std.math.maxInt(u64) - region.size) {
+                overflow = true;
+                break;
+            }
+            total += region.size;
+        }
+
+        debugPrint("Total calculated: 0x{x}", .{total});
+
+        if (overflow) {
+            println("\nWarning: Memory total overflow", .{});
+        } else {
+            // Print total in hex first
+            println("\nTotal memory: 0x{x} bytes", .{total});
+
+            // Then try to print in MB, with overflow protection
+            if (total >= 1024 * 1024) {
+                const mb = @divFloor(total, 1024 * 1024);
+                println("            ({} MB)", .{mb});
+            }
+        }
+
+        debugPrint("Memory section complete, continuing to devices", .{});
+        // Continue with rest of FDT info...
         println("\nDevices:", .{});
         for (device_buffer[0..device_count], 0..) |device, i| {
             println("  Device {}:", .{i});
@@ -799,11 +912,19 @@ pub fn dumpMemoryRegions() void {
     // Only iterate if we have regions
     if (memory_region_count > 0) {
         for (memory_region_buffer[0..memory_region_count], 0..) |region, i| {
-            println("  Region {}: base=0x{x} size=0x{x} ({} MB)", .{ i, region.base, region.size, if (region.size >= 1024 * 1024) region.size / (1024 * 1024) else 0 });
+            // Print size in bytes first
+            println("  Region {}: base=0x{x} size=0x{x}", .{ i, region.base, region.size });
         }
 
         const total = getTotalMemory();
-        println("Total Memory: {} MB", .{total / (1024 * 1024)});
+        // Print total in bytes first
+        println("Total Memory: 0x{x} bytes", .{total});
+
+        // Then try to convert to MB if large enough
+        if (total >= 1024 * 1024) {
+            const mb = @divFloor(total, 1024 * 1024);
+            println("           ({} MB)", .{mb});
+        }
     } else {
         println("No memory regions found", .{});
     }
