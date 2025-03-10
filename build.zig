@@ -6,6 +6,8 @@ pub const QEMU_OPTS = .{
     "virt",
     "-smp",
     "4",
+    "-m",
+    "256M",
     // This means it will use OpenSBI
     "-bios",
     "default",
