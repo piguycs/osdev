@@ -565,8 +565,18 @@ pub fn getMemoryRegions() []const MemoryRegion {
 
 // Get total memory size
 pub fn getTotalMemory() u64 {
+    // Add debug output
+    debugPrint("Calculating total memory from {d} regions", .{memory_region_count});
+
     var total: u64 = 0;
+    // Add bounds check
+    if (memory_region_count > MAX_MEMORY_REGIONS) {
+        debugPrint("Warning: memory_region_count {d} exceeds MAX_MEMORY_REGIONS", .{memory_region_count});
+        return 0;
+    }
+
     for (memory_region_buffer[0..memory_region_count]) |region| {
+        debugPrint("Adding region: base=0x{x} size=0x{x}", .{ region.base, region.size });
         total += region.size;
     }
     return total;
@@ -778,9 +788,23 @@ fn parsePCIRanges(data: []const u8) void {
 
 // Add this helper function to dump memory regions for debugging
 pub fn dumpMemoryRegions() void {
-    println("\nMemory Regions ({} found):", .{memory_region_count});
-    for (memory_region_buffer[0..memory_region_count], 0..) |region, i| {
-        println("  Region {}: base=0x{x} size=0x{x} ({} MB)", .{ i, region.base, region.size, region.size / (1024 * 1024) });
+    // Add safety checks
+    if (memory_region_count > MAX_MEMORY_REGIONS) {
+        println("Error: Invalid memory region count: {}", .{memory_region_count});
+        return;
     }
-    println("Total Memory: {} MB", .{getTotalMemory() / (1024 * 1024)});
+
+    println("\nMemory Regions ({} found):", .{memory_region_count});
+
+    // Only iterate if we have regions
+    if (memory_region_count > 0) {
+        for (memory_region_buffer[0..memory_region_count], 0..) |region, i| {
+            println("  Region {}: base=0x{x} size=0x{x} ({} MB)", .{ i, region.base, region.size, if (region.size >= 1024 * 1024) region.size / (1024 * 1024) else 0 });
+        }
+
+        const total = getTotalMemory();
+        println("Total Memory: {} MB", .{total / (1024 * 1024)});
+    } else {
+        println("No memory regions found", .{});
+    }
 }
