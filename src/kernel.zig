@@ -56,23 +56,49 @@ export fn kmain() noreturn {
 
     // Initialize FDT
     if (fdt_header_addr) |header| {
-        fdt.init(header, true) catch |err| {
+        fdt.init(header, false) catch |err| {
             println("Failed to initialize FDT: {}", .{err});
             panic("FDT initialization failed", .{}, @src());
         };
 
-        // Log memory information
+        // Print memory info with safety checks
         const total_mem = fdt.getTotalMemory();
-        const max_addr = fdt.getMaxMemoryAddress();
-        println("Total memory: {} MB", .{total_mem / (1024 * 1024)});
-        println("Maximum memory address: 0x{x}", .{max_addr});
+        println("Debug: Got total memory: 0x{x}", .{total_mem});
 
-        // Log memory regions
-        for (fdt.getMemoryRegions()) |region| {
-            println("Memory region: base=0x{x} size={} MB", .{
-                region.base,
-                region.size / (1024 * 1024),
-            });
+        if (total_mem > 0) {
+            if (total_mem >= 1024 * 1024) {
+                const mb = @divFloor(total_mem, 1024 * 1024);
+                println("Total memory: {} MB", .{mb});
+            } else {
+                println("Total memory: {} bytes", .{total_mem});
+            }
+        } else {
+            println("Warning: No memory detected", .{});
+        }
+
+        const max_addr = fdt.getMaxMemoryAddress();
+        if (max_addr > 0) {
+            println("Maximum memory address: 0x{x}", .{max_addr});
+        } else {
+            println("Warning: Could not determine maximum memory address", .{});
+        }
+
+        // Log memory regions with safety checks
+        const regions = fdt.getMemoryRegions();
+        println("Debug: Found {} memory regions", .{regions.len});
+
+        for (regions) |region| {
+            if (region.size >= 1024 * 1024) {
+                println("Memory region: base=0x{x} size={} MB", .{
+                    region.base,
+                    @divFloor(region.size, 1024 * 1024),
+                });
+            } else {
+                println("Memory region: base=0x{x} size={} bytes", .{
+                    region.base,
+                    region.size,
+                });
+            }
         }
     } else {
         panic("No FDT header available", .{}, @src());
