@@ -1,6 +1,7 @@
 const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
+const sv39 = @import("riscv/sv39.zig");
 
 const prompts = @import("utils/prompts.zig");
 const reader = @import("utils/reader.zig");
@@ -33,11 +34,12 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
-        println("info: assuming main thread for hart#{any}", .{hartid});
+        _ = hartid;
+        //println("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        println("info: assuming second thread for hart#{any}", .{hartid});
-        kwait();
+        //println("info: assuming second thread for hart#{any}", .{hartid});
+        ksecond();
     }
 }
 
@@ -52,8 +54,9 @@ export fn kmain() noreturn {
     trap.init();
     writer.init();
 
-    var alloc = memory.KAlloc.init();
-    _ = &alloc; // TODO: use this for processes etc
+    var kalloc = memory.KAlloc.init();
+
+    sv39.init(&kalloc);
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
@@ -62,7 +65,14 @@ export fn kmain() noreturn {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
 
-    shell.kshell();
+    //shell.kshell();
+
+    ksecond();
+}
+
+// second stage of kmain. sets up hart specific stuff
+export fn ksecond() noreturn {
+    sv39.inithart();
 
     kwait();
 }

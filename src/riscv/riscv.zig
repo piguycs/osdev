@@ -21,3 +21,25 @@ pub inline fn csrw(comptime reg: []const u8, value: u64) void {
 pub inline fn enable_all_sie() void {
     csrw("sie", SIE_SEIE | SIE_STIE | SIE_SSIE);
 }
+
+pub inline fn sfence_vma() void {
+    asm volatile ("sfence.vma zero, zero");
+}
+
+pub const Satp = packed struct {
+    mode: u4,
+    asid: u16,
+    ppn: u44,
+};
+
+pub const Mode = enum(u4) {
+    Sv39 = 8,
+};
+
+pub inline fn set_satp(mode: Mode, pagetable: u64) void {
+    csrw("satp", @bitCast(Satp{
+        .mode = @intFromEnum(mode),
+        .asid = 0,
+        .ppn = @truncate(pagetable >> 12),
+    }));
+}
