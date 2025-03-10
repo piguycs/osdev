@@ -65,7 +65,7 @@ export fn kmain() noreturn {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
 
-    //shell.kshell();
+    shell.kshell();
 
     ksecond();
 }

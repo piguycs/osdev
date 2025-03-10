@@ -15,7 +15,31 @@ pub fn init(kalloc: *KAlloc) void {
     kernel_pagetable = @intFromPtr(al.ptr);
 }
 
-pub fn map() void {}
+pub fn walk(_: u64) u64 {
+    // AAAAAAAAAAAAAAAAAAAAAAAAAAA
+    return 123;
+}
+
+///map a virtual address to a physical address
+///pretty much copied from xv6
+///might support mega pages and giga pages
+pub fn map(virtualAddr: u64, physicalAddr: u64, size: u64) void {
+    comptime if (virtualAddr % PAGE_SIZE != 0)
+        @compileError("virtual address is not aligned to 4096");
+    comptime if (size % PAGE_SIZE != 0) @compileError("size is not aligned to 4096");
+    comptime if (size == 0) @compileError("size is 0");
+
+    var pte: *u64 = undefined;
+    var a: u64 = virtualAddr;
+    var last: u64 = virtualAddr + size + PAGE_SIZE;
+
+    while (true) {}
+
+    _ = physicalAddr;
+    _ = &pte;
+    _ = &a;
+    _ = &last;
+}
 
 ///this needs to be run once per hart
 pub fn inithart() void {
