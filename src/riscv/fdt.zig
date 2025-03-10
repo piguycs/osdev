@@ -322,14 +322,19 @@ fn parseProperty(name: []const u8, data: []const u8) !void {
     if (strEql(name, PROP_REG) and data.len >= 16) {
         const base = parse64(data.ptr);
         const size = parse64(data.ptr + 8);
-        if (strStartsWith(current_node, "/memory")) {
+
+        // Add debug output to see what nodes we're processing
+        debugPrint("Processing REG property in node '{s}' - base: 0x{x}, size: 0x{x}", .{ current_node, base, size });
+
+        // Check for both "memory" and "memory@" prefixes
+        if (strStartsWith(current_node, "memory") or strStartsWith(current_node, "memory@")) {
             if (memory_region_count >= MAX_MEMORY_REGIONS) {
                 debugPrint("Warning: Too many memory regions", .{});
                 return;
             }
             memory_region_buffer[memory_region_count] = .{ .base = base, .size = size };
             memory_region_count += 1;
-            debugPrint("Found memory region: base=0x{x} size=0x{x}", .{ base, size });
+            debugPrint("Added memory region {}: base=0x{x} size=0x{x}", .{ memory_region_count - 1, base, size });
         } else if (device_count < MAX_DEVICES) {
             // If we're not in a memory node, this might be a device's register
             if (device_count > 0) { // Update the last device's reg info
@@ -769,4 +774,13 @@ fn parsePCIRanges(data: []const u8) void {
         });
         pci_bridge = bridge;
     }
+}
+
+// Add this helper function to dump memory regions for debugging
+pub fn dumpMemoryRegions() void {
+    println("\nMemory Regions ({} found):", .{memory_region_count});
+    for (memory_region_buffer[0..memory_region_count], 0..) |region, i| {
+        println("  Region {}: base=0x{x} size=0x{x} ({} MB)", .{ i, region.base, region.size, region.size / (1024 * 1024) });
+    }
+    println("Total Memory: {} MB", .{getTotalMemory() / (1024 * 1024)});
 }
