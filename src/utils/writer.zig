@@ -73,6 +73,11 @@ pub fn assert(ok: bool, comptime fmt: ?[]const u8, src: ?SourceLocation) void {
     if (!ok) panic(fmt, .{}, src);
 }
 
+///comptime assert
+pub fn ct_assert(ok: bool, comptime fmt: ?[]const u8) void {
+    if (!ok) @compileError(fmt);
+}
+
 export fn hang() noreturn {
     panicked = true;
     while (true) {}
