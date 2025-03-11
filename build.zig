@@ -7,8 +7,7 @@ pub const QEMU_OPTS = .{
     "-smp",
     "4",
     "-m",
-    "256M",
-    // This means it will use OpenSBI
+    "8G",
     "-bios",
     "default",
     "-kernel",

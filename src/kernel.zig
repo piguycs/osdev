@@ -1,6 +1,7 @@
 const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
+const sv39 = @import("riscv/sv39.zig");
 
 const prompts = @import("utils/prompts.zig");
 const reader = @import("utils/reader.zig");
@@ -26,7 +27,7 @@ const NCPU = 4;
 export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
-export fn start(_: u64, dtb_ptr: u64) void {
+export fn start(hartid: u64, dtb_ptr: u64) void {
     riscv.enable_all_sie();
 
     if (fdt_header_addr == null) {
@@ -36,9 +37,12 @@ export fn start(_: u64, dtb_ptr: u64) void {
 
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
+        _ = hartid;
+        //println("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        kwait();
+        //println("info: assuming second thread for hart#{any}", .{hartid});
+        ksecond();
     }
 }
 
@@ -95,21 +99,48 @@ export fn kmain() noreturn {
         panic("No FDT header available", .{}, @src());
     }
 
-    var alloc = memory.KAlloc.init();
-    _ = &alloc;
+    var kalloc = memory.KAlloc.init();
+
+    const memreq = [_]sv39.MemReq{
+        .{
+            .name = "HELLO WORLD",
+            .physicalAddr = 0x10000000,
+            .virtualAddr = 0x10000000,
+        },
+        .{
+            .name = "WORLD",
+            .physicalAddr = 0x20000000,
+            .virtualAddr = 0x20000000,
+            .numPages = 4,
+        },
+        .{
+            .name = "NO WORLD",
+            .physicalAddr = 0x30000000,
+            .virtualAddr = 0x30000000,
+            .numPages = 2,
+        },
+    };
+
+    sv39.init(&kalloc, &memreq) catch |err| {
+        panic("could not initialise paging: {any}", .{err}, @src());
+    };
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
 
-    for (0..NCPU) |id| {
-        _ = sbi.HartStateManagement.hart_start(id, null);
-    }
+    // for (0..NCPU) |id| {
+    //     _ = sbi.HartStateManagement.hart_start(id, null);
+    // }
 
     // Initialize device discovery system
     device_discovery.init();
 
-    shell.kshell();
+    ksecond();
+}
 
+// second stage of kmain. sets up hart specific stuff
+export fn ksecond() noreturn {
+    sv39.inithart();
     kwait();
 }
 

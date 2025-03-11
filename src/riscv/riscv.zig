@@ -21,3 +21,20 @@ pub inline fn csrw(comptime reg: []const u8, value: u64) void {
 pub inline fn enable_all_sie() void {
     csrw("sie", SIE_SEIE | SIE_STIE | SIE_SSIE);
 }
+
+pub inline fn sfence_vma() void {
+    asm volatile ("sfence.vma zero, zero");
+}
+
+pub const Mode = enum(u64) {
+    Sv39 = 8,
+};
+
+const SATP_MODE_SV39 = 8;
+const SATP_MODE_SHIFT = 60;
+const PAGE_SHIFT = 12;
+
+pub inline fn set_satp(mode: Mode, pagetable: u64) void {
+    const value = @intFromEnum(mode) << SATP_MODE_SHIFT | pagetable >> PAGE_SHIFT;
+    csrw("satp", value);
+}

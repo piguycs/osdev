@@ -67,6 +67,10 @@ pub const KAlloc = struct {
     }
 
     pub fn alloc(self: *KAlloc) []u8 {
+        return self.allocT(u8);
+    }
+
+    pub fn allocT(self: *KAlloc, comptime T: type) []T {
         self.lock.acquire();
         defer self.lock.release();
 
@@ -74,9 +78,14 @@ pub const KAlloc = struct {
 
         if (r) |node| {
             self.freelist.next = node.next;
-            const mem = @as([*]u8, @ptrCast(node))[0..PAGE_SIZE];
-            @memset(mem, 0);
-            return mem;
+
+            const items_count = PAGE_SIZE / @sizeOf(T);
+            const ptr = @as([*]T, @ptrCast(@alignCast(node)));
+            const slice = ptr[0..items_count];
+
+            @memset(@as([*]u8, @ptrCast(ptr))[0..PAGE_SIZE], 0);
+
+            return slice;
         }
 
         panic("out of memory", .{}, @src());
