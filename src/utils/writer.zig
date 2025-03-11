@@ -75,7 +75,7 @@ pub fn assert(ok: bool, comptime fmt: ?[]const u8, src: ?SourceLocation) void {
 
 ///comptime assert
 pub fn ct_assert(ok: bool, comptime fmt: ?[]const u8) void {
-    if (!ok) @compileError(fmt);
+    if (!ok) @compileError(fmt orelse "assert failed");
 }
 
 export fn hang() noreturn {
