@@ -69,6 +69,10 @@ pub fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) nore
     hang();
 }
 
+pub fn assert(ok: bool, comptime fmt: ?[]const u8, src: ?SourceLocation) void {
+    if (!ok) panic(fmt, .{}, src);
+}
+
 export fn hang() noreturn {
     panicked = true;
     while (true) {}
