@@ -21,6 +21,8 @@ const shell_command = shell.shell_command;
 
 const NCPU = 4;
 
+extern const end: u8;
+
 export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
@@ -54,31 +56,24 @@ export fn kmain() noreturn {
     trap.init();
     writer.init();
 
+    println("kalloc", .{});
     var kalloc = memory.KAlloc.init();
+    println("/kalloc", .{});
 
     const memreq = [_]sv39.MemReq{
         .{
-            .name = "HELLO WORLD",
-            .physicalAddr = 0x10000000,
-            .virtualAddr = 0x10000000,
-        },
-        .{
-            .name = "WORLD",
-            .physicalAddr = 0x20000000,
-            .virtualAddr = 0x20000000,
-            .numPages = 4,
-        },
-        .{
-            .name = "NO WORLD",
-            .physicalAddr = 0x30000000,
-            .virtualAddr = 0x30000000,
-            .numPages = 2,
+            .name = "KERNEL",
+            .physicalAddr = 0x80200000,
+            .virtualAddr = 0x80200000,
+            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000) / 4096),
         },
     };
 
     sv39.init(&kalloc, &memreq) catch |err| {
         panic("could not initialise paging: {any}", .{err}, @src());
     };
+    sv39.inithart();
+    println("done modafuka", .{});
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
@@ -87,7 +82,7 @@ export fn kmain() noreturn {
     //     _ = sbi.HartStateManagement.hart_start(id, null);
     // }
 
-    ksecond();
+    kwait();
 }
 
 // second stage of kmain. sets up hart specific stuff
