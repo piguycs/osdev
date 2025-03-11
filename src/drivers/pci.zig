@@ -76,8 +76,8 @@
 //               - 0xbebebebe indicates big endian.
 //               - 0x1e1e1e1e indicates little endian.
 
-const fdt = @import("riscv/fdt.zig");
-const writer = @import("utils/writer.zig");
+const fdt = @import("../riscv/fdt.zig");
+const writer = @import("../utils/writer.zig");
 const println = writer.println;
 
 // PCI Configuration Space constants
@@ -88,18 +88,27 @@ var PCI_MEM_SIZE: u64 = undefined;
 var PCI_IO_BASE: u64 = undefined;
 var PCI_IO_SIZE: u64 = undefined;
 
+const PCI_INVALID_DEVICE: u16 = 0x0000;
 const PCI_INVALID_VENDOR: u16 = 0xFFFF;
 
-pub const PCIDeviceInfo = struct {
+pub const PciDeviceInfo = struct {
     vendor_id: u16,
     device_id: u16,
     class_code: u8,
     subclass: u8,
-    prog_if: u8,
-    revision: u8,
     header_type: u8,
-    secondary_bus: ?u8, // Only valid for bridges
+    secondary_bus: ?u8,
 };
+
+// PCI device discovery callback type
+pub const DeviceCallback = *const fn (bus: u8, dev: u8, func: u8, info: PciDeviceInfo) void;
+
+// Global callback for device discovery
+var discovery_callback: ?DeviceCallback = null;
+
+pub fn setDiscoveryCallback(callback: DeviceCallback) void {
+    discovery_callback = callback;
+}
 
 // PCI Configuration Space registers
 const PCI_VENDOR_ID: u8 = 0x00;
@@ -114,19 +123,42 @@ const PCI_HEADER_TYPE: u8 = 0x0E;
 const PCI_SECONDARY_BUS: u8 = 0x19;
 
 // PCI Class Codes
-pub const PCI_CLASS_UNCLASSIFIED: u8 = 0x00;
-pub const PCI_CLASS_STORAGE: u8 = 0x01;
-pub const PCI_CLASS_NETWORK: u8 = 0x02;
-pub const PCI_CLASS_DISPLAY: u8 = 0x03;
-pub const PCI_CLASS_MULTIMEDIA: u8 = 0x04;
-pub const PCI_CLASS_MEMORY: u8 = 0x05;
-pub const PCI_CLASS_BRIDGE: u8 = 0x06;
+pub const PCI_CLASS_UNCLASSIFIED = 0x00;
+pub const PCI_CLASS_STORAGE = 0x01;
+pub const PCI_CLASS_NETWORK = 0x02;
+pub const PCI_CLASS_DISPLAY = 0x03;
+pub const PCI_CLASS_MULTIMEDIA = 0x04;
+pub const PCI_CLASS_MEMORY = 0x05;
+pub const PCI_CLASS_BRIDGE = 0x06;
+pub const PCI_CLASS_COMMUNICATION = 0x07;
+pub const PCI_CLASS_SYSTEM = 0x08;
+pub const PCI_CLASS_INPUT = 0x09;
+pub const PCI_CLASS_DOCKING = 0x0A;
+pub const PCI_CLASS_PROCESSOR = 0x0B;
+pub const PCI_CLASS_SERIAL = 0x0C;
+pub const PCI_CLASS_WIRELESS = 0x0D;
+pub const PCI_CLASS_SATELLITE = 0x0F;
+pub const PCI_CLASS_ENCRYPTION = 0x10;
+pub const PCI_CLASS_SIGNAL_PROCESSING = 0x11;
+
+// PCI Bridge Subclasses
+pub const PCI_SUBCLASS_HOST_BRIDGE = 0x00;
+pub const PCI_SUBCLASS_ISA_BRIDGE = 0x01;
+pub const PCI_SUBCLASS_EISA_BRIDGE = 0x02;
+pub const PCI_SUBCLASS_MCA_BRIDGE = 0x03;
+pub const PCI_SUBCLASS_PCI_BRIDGE = 0x04;
+pub const PCI_SUBCLASS_PCMCIA_BRIDGE = 0x05;
+pub const PCI_SUBCLASS_NUBUS_BRIDGE = 0x06;
+pub const PCI_SUBCLASS_CARDBUS_BRIDGE = 0x07;
 
 // BAR (Base Address Register) related constants
 pub const PCI_BAR0: u8 = 0x10; // First BAR register
 pub const PCI_BAR_IO_SPACE: u1 = 0x1; // If bit 0 is 1, it's an I/O BAR
 pub const PCI_BAR_TYPE_64: u2 = 0x2; // If bits [2:1] = 2, it's a 64-bit BAR
 pub const PCI_BAR_PREFETCH: u1 = 0x8; // If bit 3 is 1, memory is prefetchable
+
+// Add a flag to track if PCI is properly initialized
+var pci_initialized: bool = false;
 
 pub fn init() void {
     println("Initializing PCI subsystem...", .{});
@@ -140,6 +172,12 @@ pub fn init() void {
         PCI_IO_BASE = bridge.io_base;
         PCI_IO_SIZE = bridge.io_size;
 
+        // Validate the configuration
+        if (PCI_CONFIG_BASE == 0 or PCI_CONFIG_SIZE == 0) {
+            println("Invalid PCI configuration space!", .{});
+            return;
+        }
+
         println("PCI Host Bridge found:", .{});
         println("  Config space: 0x{x:0>16} - 0x{x:0>16}", .{ PCI_CONFIG_BASE, PCI_CONFIG_BASE + PCI_CONFIG_SIZE });
         println("  Memory space: 0x{x:0>16} - 0x{x:0>16}", .{ PCI_MEM_BASE, PCI_MEM_BASE + PCI_MEM_SIZE });
@@ -147,7 +185,7 @@ pub fn init() void {
             println("  I/O space: 0x{x:0>16} - 0x{x:0>16}", .{ PCI_IO_BASE, PCI_IO_BASE + PCI_IO_SIZE });
         }
 
-        enumerate_devices();
+        pci_initialized = true;
     } else {
         println("No PCI host bridge found in FDT!", .{});
     }
@@ -158,23 +196,23 @@ fn is_mmconfig_available() bool {
 }
 
 pub fn read_config(bus: u8, device: u8, function: u8, register: u8) u32 {
-    // if (is_mmconfig_available()) {
-    //     const mmconfig_addr = PCIE_MMCONFIG_BASE +
-    //         (@as(u64, bus) << 20) |
-    //         (@as(u64, device) << 15) |
-    //         (@as(u64, function) << 12) |
-    //         @as(u64, register);
-    //     _ = mmconfig_addr;
-    // }
+    if (!pci_initialized) {
+        return 0xFFFFFFFF;
+    }
 
     const offset = (@as(u64, bus) << 16) |
         (@as(u64, device) << 11) |
         (@as(u64, function) << 8) |
         @as(u64, register & 0xFC);
 
+    // Check if the access is within bounds
+    if (offset >= PCI_CONFIG_SIZE) {
+        return 0xFFFFFFFF;
+    }
+
     const addr = PCI_CONFIG_BASE | offset;
     const ptr = @as(*volatile u32, @ptrFromInt(addr));
-    return ptr.*; // Dies here
+    return ptr.*;
 }
 
 pub fn write_config(bus: u8, device: u8, function: u8, register: u8, value: u32) void {
@@ -198,34 +236,36 @@ pub fn write_config(bus: u8, device: u8, function: u8, register: u8, value: u32)
 }
 
 pub fn enumerate_devices() void {
-    var bus: u8 = 0;
-    while (bus < 128) : (bus += 1) {
-        var device: u8 = 0;
-        while (device < 32) : (device += 1) {
-            var function: u8 = 0;
-            const vendor_id = get_device_vendor_id(bus, device, function);
-            if (vendor_id == PCI_INVALID_VENDOR) {
-                continue;
-            }
+    if (!pci_initialized) {
+        println("PCI not properly initialized, skipping enumeration", .{});
+        return;
+    }
 
-            const header = read_config(bus, device, 0, PCI_HEADER_TYPE);
-            const header_type: u8 = @truncate(header >> 16);
-            const is_multifunction = (header_type & 0x80) != 0;
+    // Start with bus 0 only - don't recurse into bridges yet
+    enumerate_bus(0);
+}
 
-            const max_functions: u8 = if (is_multifunction) 8 else 1;
+fn enumerate_bus(bus: u8) void {
+    var dev: u8 = 0;
+    while (dev < 32) : (dev += 1) {
+        var func: u8 = 0;
+        while (func < 8) : (func += 1) {
+            const vendor_id = get_device_vendor_id(bus, dev, func);
+            const device_id = get_device_device_id(bus, dev, func);
+            if (vendor_id != PCI_INVALID_VENDOR and device_id != PCI_INVALID_DEVICE) {
+                const info = get_device_info(bus, dev, func);
 
-            while (function < max_functions) : (function += 1) {
-                const vid = get_device_vendor_id(bus, device, function);
-                if (vid != PCI_INVALID_VENDOR) {
-                    const info = get_device_info(bus, device, function);
-                    print_device_info(bus, device, function, info);
+                // Call discovery callback if registered
+                if (discovery_callback) |callback| {
+                    callback(bus, dev, func, info);
+                }
 
-                    if (info.class_code == PCI_CLASS_BRIDGE and info.subclass == 0x04 and info.secondary_bus != null) {
-                        const secondary = info.secondary_bus.?;
-                        if (secondary > bus) {
-                            bus = secondary;
-                            device = 0;
-                            function = 0;
+                // If this is a PCI-to-PCI bridge, enumerate the secondary bus
+                if (info.class_code == PCI_CLASS_BRIDGE and info.subclass == PCI_SUBCLASS_PCI_BRIDGE) {
+                    if (info.secondary_bus) |secondary_bus| {
+                        // Only enumerate if secondary bus is different from current
+                        if (secondary_bus != bus) {
+                            enumerate_bus(secondary_bus);
                         }
                     }
                 }
@@ -234,14 +274,14 @@ pub fn enumerate_devices() void {
     }
 }
 
-pub fn get_device_info(bus: u8, device: u8, function: u8) PCIDeviceInfo {
+pub fn get_device_info(bus: u8, device: u8, function: u8) PciDeviceInfo {
     const config_data = read_config(bus, device, function, 0);
     const vendor_id: u16 = @truncate(config_data);
     const device_id: u16 = @truncate(config_data >> 16);
 
     const class_data = read_config(bus, device, function, 0x08);
-    const revision: u8 = @truncate(class_data);
-    const prog_if: u8 = @truncate(class_data >> 8);
+    // const revision: u8 = @truncate(class_data);
+    // const prog_if: u8 = @truncate(class_data >> 8);
     const subclass: u8 = @truncate(class_data >> 16);
     const class_code: u8 = @truncate(class_data >> 24);
 
@@ -252,19 +292,17 @@ pub fn get_device_info(bus: u8, device: u8, function: u8) PCIDeviceInfo {
         secondary_bus = @truncate(read_config(bus, device, function, PCI_SECONDARY_BUS) >> 8);
     }
 
-    return PCIDeviceInfo{
+    return PciDeviceInfo{
         .vendor_id = vendor_id,
         .device_id = device_id,
         .class_code = class_code,
         .subclass = subclass,
-        .prog_if = prog_if,
-        .revision = revision,
         .header_type = header_type,
         .secondary_bus = secondary_bus,
     };
 }
 
-fn print_device_info(bus: u8, device: u8, function: u8, info: PCIDeviceInfo) void {
+fn print_device_info(bus: u8, device: u8, function: u8, info: PciDeviceInfo) void {
     writer.println("PCI Device: {x:0>2}:{x:0>2}.{x:0>1}", .{ bus, device, function });
     writer.println("  Vendor ID: {x:0>4}, Device ID: {x:0>4}", .{ info.vendor_id, info.device_id });
     writer.println("  Class: {x:0>2}, Subclass: {x:0>2}, ProgIF: {x:0>2}", .{ info.class_code, info.subclass, info.prog_if });
@@ -343,12 +381,21 @@ pub fn get_device_secondary_bus(bus: u8, device: u8, function: u8) u8 {
 pub fn get_bar_info(bus: u8, device: u8, function: u8, bar_num: u8) struct { base: u64, size: u64 } {
     const bar_offset = PCI_BAR0 + (bar_num * 4);
 
+    // First enable memory access in command register
+    const cmd = read_config(bus, device, function, PCI_COMMAND);
+    if ((cmd & 0x2) == 0) { // If memory space not enabled
+        write_config(bus, device, function, PCI_COMMAND, cmd | 0x2); // Enable memory space
+        println("Enabled memory space access", .{});
+    }
+
     // Read the original BAR value
     const orig_bar = read_config(bus, device, function, bar_offset);
+    println("BAR{}: Original value: 0x{x:0>8}", .{ bar_num, orig_bar });
 
     // Write all 1s to get the size mask
     write_config(bus, device, function, bar_offset, 0xFFFFFFFF);
     const size_mask = read_config(bus, device, function, bar_offset);
+    println("BAR{}: Size mask: 0x{x:0>8}", .{ bar_num, size_mask });
 
     // Restore the original value
     write_config(bus, device, function, bar_offset, orig_bar);
@@ -356,37 +403,52 @@ pub fn get_bar_info(bus: u8, device: u8, function: u8, bar_num: u8) struct { bas
     const is_io = (orig_bar & 1) == 1;
     const is_64bit = !is_io and ((orig_bar >> 1) & 0x3) == 0x2;
 
-    var base: u64 = undefined;
-    var size: u64 = undefined;
+    println("BAR{}: Type: {s} {s}bit", .{ bar_num, if (is_io) "I/O" else "Memory", if (is_64bit) "64" else "32" });
+
+    // Calculate size first
+    const size: u64 = if (is_io)
+        ~(size_mask & 0xFFFFFFFC) + 1
+    else
+        ~(size_mask & 0xFFFFFFF0) + 1;
+
+    // Now handle base address
+    var base: u64 = 0;
 
     if (is_io) {
-        // I/O BAR
-        const raw_base = orig_bar & 0xFFFFFFFC;
-        size = ~(size_mask & 0xFFFFFFFC) + 1;
-        // Translate I/O address using PCI I/O base
-        base = if (PCI_IO_BASE != 0) PCI_IO_BASE + raw_base else raw_base;
+        base = orig_bar & 0xFFFFFFFC;
     } else {
-        // Memory BAR
-        const raw_base = orig_bar & 0xFFFFFFF0;
+        // For memory BARs, check if we need to assign an address
+        var raw_base = orig_bar & 0xFFFFFFF0;
+
+        // If it's the Bochs display, use known good addresses
+        const vendor_id = get_device_vendor_id(bus, device, function);
+        const device_id = get_device_device_id(bus, device, function);
+        if (vendor_id == 0x1234 and device_id == 0x1111) {
+            const addr: u32 = switch (bar_num) {
+                0 => 0x40000000, // Framebuffer
+                2 => 0x41000000, // MMIO
+                else => 0,
+            };
+            if (addr != 0) {
+                write_config(bus, device, function, bar_offset, addr);
+                // Verify the write took effect
+                const new_bar = read_config(bus, device, function, bar_offset);
+                raw_base = new_bar & 0xFFFFFFF0;
+                println("BAR{}: Assigned address 0x{x:0>8}, read back 0x{x:0>8}", .{ bar_num, addr, raw_base });
+            }
+        }
+
+        base = raw_base;
+
         if (is_64bit) {
-            // Read the high 32 bits
-            const orig_bar_high = read_config(bus, device, function, bar_offset + 4);
-            const raw_base_high = @as(u64, orig_bar_high) << 32;
-
-            // Get size (write all 1s to high part too)
-            write_config(bus, device, function, bar_offset + 4, 0xFFFFFFFF);
-            const size_mask_high = read_config(bus, device, function, bar_offset + 4);
-            write_config(bus, device, function, bar_offset + 4, orig_bar_high);
-
-            size = ~((@as(u64, size_mask_high) << 32) | (size_mask & 0xFFFFFFF0)) + 1;
-            // Translate memory address using PCI memory base
-            base = if (PCI_MEM_BASE != 0) PCI_MEM_BASE + raw_base + raw_base_high else raw_base + raw_base_high;
-        } else {
-            size = ~(size_mask & 0xFFFFFFF0) + 1;
-            // Translate memory address using PCI memory base
-            base = if (PCI_MEM_BASE != 0) PCI_MEM_BASE + raw_base else raw_base;
+            // Handle high 32 bits for 64-bit BAR
+            const bar_high = read_config(bus, device, function, bar_offset + 4);
+            if (bar_high != 0) {
+                base |= @as(u64, bar_high) << 32;
+            }
         }
     }
 
+    println("BAR{}: Base: 0x{x:0>16}, Size: 0x{x:0>16}", .{ bar_num, base, size });
     return .{ .base = base, .size = size };
 }

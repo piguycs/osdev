@@ -1,12 +1,155 @@
+const std = @import("std");
+const device = @import("../devices/device.zig");
+const manager = @import("../devices/manager.zig");
+const driver = @import("../devices/driver.zig");
+const writer = @import("../utils/writer.zig");
 const pci = @import("pci.zig");
-const writer = @import("utils/writer.zig");
-const println = writer.println;
 
-var global_display: BochsDisplay = undefined;
+const Device = device.Device;
+const DeviceClass = device.DeviceClass;
+const DeviceStatus = device.DeviceStatus;
+const println = writer.println;
 
 // Bochs/QEMU specific PCI IDs
 pub const VENDOR_ID_BOCHS: u16 = 0x1234;
 pub const DEVICE_ID_BOCHS_DISPLAY: u16 = 0x1111;
+
+// Static properties for the Bochs display
+var properties = [_]device.DeviceProperty{
+    .{
+        .name = "vendor_id",
+        .property_type = .Integer,
+        .value = .{ .Integer = VENDOR_ID_BOCHS },
+    },
+    .{
+        .name = "device_id",
+        .property_type = .Integer,
+        .value = .{ .Integer = DEVICE_ID_BOCHS_DISPLAY },
+    },
+    .{
+        .name = "width",
+        .property_type = .Integer,
+        .value = .{ .Integer = 640 },
+    },
+    .{
+        .name = "height",
+        .property_type = .Integer,
+        .value = .{ .Integer = 480 },
+    },
+    .{
+        .name = "bpp",
+        .property_type = .Integer,
+        .value = .{ .Integer = 32 },
+    },
+    .{
+        .name = "status",
+        .property_type = .String,
+        .value = .{ .String = "enabled" },
+    },
+};
+
+// Device instance
+var bochs_device = Device{
+    .name = "bochs_display",
+    .class = .Display,
+    .status = .Uninitialized,
+    .properties = &properties,
+    .parent = null,
+    .children = &[_]Device{},
+    .init = null,
+    .probe = null,
+    .remove = null,
+    .diagnostics = runDiagnostics,
+};
+
+// Hardware probing function
+fn probeDisplayHw(bus: u8, dev: u8, func: u8) bool {
+    const info = pci.get_device_info(bus, dev, func);
+    println("Probing Bochs display at {x:0>2}:{x:0>2}.{x:0>1}", .{ bus, dev, func });
+    println("  Found: vendor={x:0>4} device={x:0>4} class={x:0>2} subclass={x:0>2}", .{
+        info.vendor_id,
+        info.device_id,
+        info.class_code,
+        info.subclass,
+    });
+    println("  Expected: vendor={x:0>4} device={x:0>4} class={x:0>2} subclass={x:0>2}", .{
+        VENDOR_ID_BOCHS,
+        DEVICE_ID_BOCHS_DISPLAY,
+        pci.PCI_CLASS_DISPLAY,
+        0x80,
+    });
+
+    return info.vendor_id == VENDOR_ID_BOCHS and
+        info.device_id == DEVICE_ID_BOCHS_DISPLAY and
+        info.class_code == pci.PCI_CLASS_DISPLAY and
+        info.subclass == 0x80;
+}
+
+// Device creation function
+fn createDisplay(bus: u8, dev: u8, func: u8) ?*Device {
+    if (BochsDisplay.init(bus, dev, func, true)) |*display| {
+        // Configure display mode
+        display.*.set_mode(DisplayMode{
+            .width = 640,
+            .height = 480,
+            .bpp = 32,
+            .enabled = true,
+            .virtual_width = 640,
+            .virtual_height = 480,
+        }, true);
+
+        // Set device as active
+        bochs_device.status = .Active;
+        return &bochs_device;
+    } else |_| {
+        return null;
+    }
+}
+
+// Driver definition
+pub const bochs_driver = driver.Driver{
+    .name = "bochs_display",
+    .class = .Display,
+    .ids = &[_]driver.DriverId{
+        .{
+            .vendor_id = VENDOR_ID_BOCHS,
+            .device_id = DEVICE_ID_BOCHS_DISPLAY,
+            .class_code = pci.PCI_CLASS_DISPLAY,
+            .subclass = 0x80,
+        },
+    },
+    .probe = probeDisplayHw,
+    .create = createDisplay,
+};
+
+// Register the driver
+pub fn register() void {
+    _ = driver.registerDriver(&bochs_driver);
+    println("Registered Bochs display driver", .{});
+}
+
+// Diagnostics function
+fn runDiagnostics(dev: *Device) void {
+    writer.println("Running Bochs Display diagnostics:", .{});
+    writer.println("  Vendor ID: 0x{x}", .{VENDOR_ID_BOCHS});
+    writer.println("  Device ID: 0x{x}", .{DEVICE_ID_BOCHS_DISPLAY});
+    writer.println("  Status: {s}", .{dev.status.toString()});
+    writer.println("  Resolution: {}x{} @ {}bpp", .{
+        properties[2].value.Integer,
+        properties[3].value.Integer,
+        properties[4].value.Integer,
+    });
+}
+
+//
+//
+//
+//       Driver Implementation Details
+//
+//
+//
+
+var global_display: BochsDisplay = undefined;
 
 // PCI Command Register bits
 const PCI_COMMAND_IO_ENABLE: u16 = 0x1;
@@ -74,81 +217,61 @@ pub const BochsDisplay = struct {
 
     const Self = @This();
 
-    pub fn init(debug: bool) !*Self {
-        // Find the Bochs display controller
-        var bus: u8 = 0;
-        while (bus < 128) : (bus += 1) {
-            var device: u8 = 0;
-            while (device < 32) : (device += 1) {
-                var function: u8 = 0;
-                while (function < 8) : (function += 1) {
-                    const info = pci.get_device_info(bus, device, function);
-                    if (info.vendor_id != 0xffff and debug) {
-                        println("vendor_id: {x}, device_id: {x}", .{ info.vendor_id, info.device_id });
-                    }
-                    if (info.vendor_id == VENDOR_ID_BOCHS and info.device_id == DEVICE_ID_BOCHS_DISPLAY) {
-                        if (debug) {
-                            println("Match found, trying to init Bochs display", .{});
-                        }
-                        // Found the Bochs display controller
-                        if (info.class_code == pci.PCI_CLASS_DISPLAY) {
-                            // Enable PCI memory and I/O access
-                            const command_reg = pci.read_config(bus, device, function, 0x04);
-                            const new_command = (command_reg & 0xFFFF0000) | PCI_COMMAND_MEM_ENABLE | PCI_COMMAND_IO_ENABLE;
+    pub fn init(bus: u8, dev: u8, function: u8, debug: bool) !*Self {
+        // Enable PCI memory and I/O access
+        const command_reg = pci.read_config(bus, dev, function, 0x04);
+        const new_command = (command_reg & 0xFFFF0000) | PCI_COMMAND_MEM_ENABLE | PCI_COMMAND_IO_ENABLE;
+        pci.write_config(bus, dev, function, 0x04, new_command);
 
-                            // Get BAR sizes first
-                            const fb_bar = pci.get_bar_info(bus, device, function, 0);
-                            const mmio_bar = pci.get_bar_info(bus, device, function, 2);
-
-                            if (debug) {
-                                println("Required sizes - FB: 0x{x}, MMIO: 0x{x}", .{ fb_bar.size, mmio_bar.size });
-                            }
-
-                            // Assign addresses to BARs
-                            // For RISC-V virt machine, we can use addresses starting at 0x40000000
-                            const fb_addr: u32 = 0x40000000;
-                            const mmio_addr: u32 = 0x41000000;
-
-                            // Write the addresses to the BARs
-                            pci.write_config(bus, device, function, pci.PCI_BAR0, fb_addr);
-                            pci.write_config(bus, device, function, pci.PCI_BAR0 + 0x4, 0); // Upper 32 bits
-                            pci.write_config(bus, device, function, pci.PCI_BAR0 + 0x8, mmio_addr);
-
-                            // Now enable memory access
-                            pci.write_config(bus, device, function, 0x04, new_command);
-
-                            // Read back the assigned addresses
-                            const fb_base = pci.read_config(bus, device, function, pci.PCI_BAR0) & 0xFFFFFFF0; // Mask off the lower 4 bits
-                            const mmio_base = pci.read_config(bus, device, function, pci.PCI_BAR0 + 0x8) & 0xFFFFFFF0;
-
-                            if (debug) {
-                                println("Assigned addresses - FB: 0x{x}, MMIO: 0x{x}", .{ fb_base, mmio_base });
-                            }
-
-                            global_display = Self{
-                                .bus = bus,
-                                .device = device,
-                                .function = function,
-                                .framebuffer_base = fb_base,
-                                .framebuffer_size = fb_bar.size,
-                                .mmio_base = mmio_base,
-                                .mmio_size = mmio_bar.size,
-                                .current_mode = DisplayMode{
-                                    .width = 0,
-                                    .height = 0,
-                                    .bpp = 0,
-                                    .enabled = false,
-                                }, // This will be set later via set_mode
-                                .framebuffer = @as([*]volatile u8, @ptrFromInt(fb_base)),
-                            };
-                            return &global_display;
-                        }
-                    }
-                }
-            }
+        if (debug) {
+            println("PCI command register set to 0x{x}", .{new_command});
         }
 
-        return error.BochsDisplayNotFound;
+        // Get BAR sizes and addresses
+        const fb_bar = pci.get_bar_info(bus, dev, function, 0);
+        const mmio_bar = pci.get_bar_info(bus, dev, function, 2);
+
+        if (debug) {
+            println("BAR info:", .{});
+            println("  Framebuffer: base=0x{x} size=0x{x}", .{ fb_bar.base, fb_bar.size });
+            println("  MMIO: base=0x{x} size=0x{x}", .{ mmio_bar.base, mmio_bar.size });
+        }
+
+        // Verify we got valid addresses
+        if (fb_bar.base == 0 or mmio_bar.base == 0) {
+            println("Error: Invalid BAR addresses", .{});
+            return error.InvalidBARAddress;
+        }
+
+        // Configure endianness - we're little endian
+        const endian_reg_offset = 0x604;
+        const endian_ptr = @as(*volatile u32, @ptrFromInt(mmio_bar.base + endian_reg_offset));
+        if (debug) {
+            println("Current endianness: 0x{x}", .{endian_ptr.*});
+        }
+        endian_ptr.* = 0x1e1e1e1e; // Set to little endian
+        if (debug) {
+            println("Set endianness to little endian (0x1e1e1e1e)", .{});
+            println("Verified endianness: 0x{x}", .{endian_ptr.*});
+        }
+
+        global_display = Self{
+            .bus = bus,
+            .device = dev,
+            .function = function,
+            .framebuffer_base = fb_bar.base,
+            .framebuffer_size = fb_bar.size,
+            .mmio_base = mmio_bar.base,
+            .mmio_size = mmio_bar.size,
+            .current_mode = DisplayMode{
+                .width = 0,
+                .height = 0,
+                .bpp = 0,
+                .enabled = false,
+            }, // This will be set later via set_mode
+            .framebuffer = @as([*]volatile u8, @ptrFromInt(fb_bar.base)),
+        };
+        return &global_display;
     }
 
     pub fn set_mode(self: *Self, mode: DisplayMode, debug: bool) void {
@@ -421,8 +544,9 @@ pub const BochsDisplay = struct {
         const center_x = @divTrunc(@as(i32, self.current_mode.width), 2);
         const center_y = @divTrunc(@as(i32, self.current_mode.height), 2);
         var expanding = true;
+        var timer: u32 = 0;
 
-        while (true) {
+        while (timer < 1000) : (timer += 1) {
             // Clear only the previous circle's area
             self.clearCircle(center_x, center_y, radius, Color.Black);
 

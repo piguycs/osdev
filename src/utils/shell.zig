@@ -4,6 +4,7 @@ const sbi = @import("../riscv/sbi.zig");
 const prompts = @import("prompts.zig");
 const reader = @import("reader.zig");
 const writer = @import("writer.zig");
+const device_commands = @import("../devices/commands.zig");
 
 const print = writer.print;
 const println = writer.println;
@@ -36,6 +37,31 @@ const shell_commands = [_]ShellCommand{
         .help = "Print FDT",
         .handler = cmd_fdt,
     },
+    .{
+        .name = "lsdev",
+        .help = "List all registered devices",
+        .handler = device_commands.cmdLsdev,
+    },
+    .{
+        .name = "devinfo",
+        .help = "Show detailed information about a device",
+        .handler = device_commands.cmdDevinfo,
+    },
+    .{
+        .name = "devtree",
+        .help = "Show device tree",
+        .handler = device_commands.cmdDevtree,
+    },
+    .{
+        .name = "devclass",
+        .help = "List devices of a specific class",
+        .handler = device_commands.cmdDevclass,
+    },
+    .{
+        .name = "devdiag",
+        .help = "Run diagnostics on a device",
+        .handler = device_commands.cmdDevdiag,
+    },
 };
 
 fn cmd_help(args: []const []const u8) void {
@@ -56,7 +82,7 @@ fn cmd_echo(args: []const []const u8) void {
 
 fn cmd_lspci(args: []const []const u8) void {
     _ = args;
-    const pci = @import("../pci.zig");
+    const pci = @import("../drivers/pci.zig");
     pci.enumerate_devices();
 }
 
