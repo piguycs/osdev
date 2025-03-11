@@ -922,8 +922,8 @@ pub fn dumpMemoryRegions() void {
 
         // Then try to convert to MB if large enough
         if (total >= 1024 * 1024) {
-            const mb = @divFloor(total, 1024 * 1024);
-            println("           ({} MB)", .{mb});
+            const mb: u64 = @divFloor(total, 1024 * 1024);
+            println("           ({d} MB)", .{mb});
         }
     } else {
         println("No memory regions found", .{});

@@ -64,16 +64,8 @@ export fn kmain() noreturn {
         const total_mem = fdt.getTotalMemory();
         println("Debug: Got total memory: 0x{x}", .{total_mem});
 
-        if (total_mem > 0) {
-            if (total_mem >= 1024 * 1024) {
-                const mb = @divFloor(total_mem, 1024 * 1024);
-                println("Total memory: {} MB", .{mb});
-            } else {
-                println("Total memory: {} bytes", .{total_mem});
-            }
-        } else {
-            println("Warning: No memory detected", .{});
-        }
+        // Dump memory regions for debugging
+        fdt.dumpMemoryRegions();
 
         const max_addr = fdt.getMaxMemoryAddress();
         if (max_addr > 0) {
@@ -88,12 +80,12 @@ export fn kmain() noreturn {
 
         for (regions) |region| {
             if (region.size >= 1024 * 1024) {
-                println("Memory region: base=0x{x} size={} MB", .{
+                println("Memory region: base=0x{x} size={d} MB", .{
                     region.base,
                     @divFloor(region.size, 1024 * 1024),
                 });
             } else {
-                println("Memory region: base=0x{x} size={} bytes", .{
+                println("Memory region: base=0x{x} size={d} bytes", .{
                     region.base,
                     region.size,
                 });

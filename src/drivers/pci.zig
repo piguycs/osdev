@@ -423,7 +423,7 @@ pub fn get_bar_info(bus: u8, device: u8, function: u8, bar_num: u8) struct { bas
         // If it's the Bochs display, use known good addresses
         const vendor_id = get_device_vendor_id(bus, device, function);
         const device_id = get_device_device_id(bus, device, function);
-        if (vendor_id == 0x1234 and device_id == 0x1111) {
+        if (raw_base == 0x0 or (vendor_id == 0x1234 and device_id == 0x1111)) {
             const addr: u32 = switch (bar_num) {
                 0 => 0x40000000, // Framebuffer
                 2 => 0x41000000, // MMIO
