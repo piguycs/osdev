@@ -8,7 +8,7 @@ const panic = writer.panic;
 
 const PAGE_SIZE = 4096;
 // HACK: I am hardcoding these in for now
-const MEM_SIZE = 64 * 1024 * 1024; // 64M
+const MEM_SIZE = 128 * 1024 * 1024; // 64M
 const MEM_END = 0x80200000 + MEM_SIZE;
 
 // PCI memory regions
@@ -37,7 +37,7 @@ pub const KAlloc = struct {
         kmem.freeRange(@intFromPtr(&end), MEM_END);
 
         // Map PCI memory regions
-        kmem.freeRange(PCI_MEM_START, PCI_MEM_START + PCI_MEM_SIZE);
+        // kmem.freeRange(PCI_MEM_START, PCI_MEM_START + PCI_MEM_SIZE);
 
         return kmem;
     }
@@ -92,7 +92,7 @@ pub const KAlloc = struct {
     }
 };
 
-fn pageRoundUp(input: u64) u64 {
+pub fn pageRoundUp(input: u64) u64 {
     comptime if ((PAGE_SIZE & (PAGE_SIZE - 1)) != 0) {
         @compileError("PAGE_SIZE must be a power of 2");
     };

@@ -24,6 +24,8 @@ const shell_command = shell.shell_command;
 
 const NCPU = 4;
 
+extern const end: u8;
+
 export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
@@ -57,75 +59,24 @@ export fn kmain() noreturn {
     writer.init();
     device_manager.init();
 
-    // Initialize FDT
-    if (fdt_header_addr) |header| {
-        fdt.init(header, false) catch |err| {
-            println("Failed to initialize FDT: {}", .{err});
-            panic("FDT initialization failed", .{}, @src());
-        };
+    println("kalloc", .{});
+    var kalloc = memory.KAlloc.init();
+    println("/kalloc", .{});
 
-        // Print memory info with safety checks
-        const total_mem = fdt.getTotalMemory();
-        println("Debug: Got total memory: 0x{x}", .{total_mem});
+    const memreq = [_]sv39.MemReq{
+        .{
+            .name = "KERNEL",
+            .physicalAddr = 0x80200000,
+            .virtualAddr = 0x80200000,
+            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000) / 4096),
+        },
+    };
 
-        // Dump memory regions for debugging
-        fdt.dumpMemoryRegions();
-
-        const max_addr = fdt.getMaxMemoryAddress();
-        if (max_addr > 0) {
-            println("Maximum memory address: 0x{x}", .{max_addr});
-        } else {
-            println("Warning: Could not determine maximum memory address", .{});
-        }
-
-        // Log memory regions with safety checks
-        const regions = fdt.getMemoryRegions();
-        println("Debug: Found {} memory regions", .{regions.len});
-
-        for (regions) |region| {
-            if (region.size >= 1024 * 1024) {
-                println("Memory region: base=0x{x} size={d} MB", .{
-                    region.base,
-                    @divFloor(region.size, 1024 * 1024),
-                });
-            } else {
-                println("Memory region: base=0x{x} size={d} bytes", .{
-                    region.base,
-                    region.size,
-                });
-            }
-        }
-    } else {
-        panic("No FDT header available", .{}, @src());
-    }
-
-    // var kalloc = memory.KAlloc.init();
-
-    // const memreq = [_]sv39.MemReq{
-    //     .{
-    //         .name = "KERNEL",
-    //         .physicalAddr = 0x80200000,
-    //         .virtualAddr = 0x80200000,
-    //     },
-    //     .{
-    //         .name = "WORLD",
-    //         .physicalAddr = 0x20000000,
-    //         .virtualAddr = 0x20000000,
-    //         .numPages = 4,
-    //     },
-    //     .{
-    //         .name = "PCI",
-    //         .physicalAddr = 0x40000000,
-    //         .virtualAddr = 0x40000000,
-    //         .numPages = 8192,
-    //     },
-    // };
-
-    // sv39.init(&kalloc, &memreq) catch |err| {
-    //     panic("could not initialise paging: {any}", .{err}, @src());
-    // };
-    // sv39.inithart();
-    println("Paging initialized", .{});
+    sv39.init(&kalloc, &memreq) catch |err| {
+        panic("could not initialise paging: {any}", .{err}, @src());
+    };
+    sv39.inithart();
+    println("done modafuka", .{});
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
@@ -141,7 +92,7 @@ export fn kmain() noreturn {
 
     shell.kshell();
 
-    ksecond();
+    kwait();
 }
 
 // second stage of kmain. sets up hart specific stuff
