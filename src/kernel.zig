@@ -125,8 +125,8 @@ export fn kmain() noreturn {
         panic("could not initialise paging: {any}", .{err}, @src());
     };
 
-    const time = riscv.csrr("time");
-    _ = sbi.TimeExt.set_timer(time + 10000000);
+    // const time = riscv.csrr("time");
+    // _ = sbi.TimeExt.set_timer(time + 10000000);
 
     // for (0..NCPU) |id| {
     //     _ = sbi.HartStateManagement.hart_start(id, null);
