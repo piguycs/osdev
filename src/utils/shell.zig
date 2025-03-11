@@ -49,14 +49,8 @@ fn cmd_echo(args: []const []const u8) void {
     println("", .{});
 }
 
-fn cmd_walk(args: []const []const u8) void {
-    const sv39 = @import("../riscv/sv39.zig");
-
-    if (args.len <= 1) return;
-
-    const vaddr = std.fmt.parseInt(u64, args[1], 16) catch unreachable;
-
-    println("output: 0x{x}", .{sv39.walk(vaddr)});
+fn cmd_walk(_: []const []const u8) void {
+    println("output: 0x{x}", .{0});
 }
 
 pub fn shell_command(input: []const u8) void {

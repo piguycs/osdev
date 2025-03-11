@@ -4,18 +4,45 @@ const memory = @import("../memory.zig");
 
 const KAlloc = memory.KAlloc;
 const println = writer.println;
+const panic = writer.panic;
+const ct_assert = writer.ct_assert;
 
 pub const PAGE_SIZE = 4096;
+// max for sv39 which only uses 39 bits
+pub const MAX_VADDR = 1 << 39;
 
-var kernel_pagetable: u64 = undefined;
+pub var kernel_pagetable: u64 = undefined;
+
+var global: *KAlloc = undefined;
 
 ///this needs to be run once on the main hart
-pub fn init(kalloc: *KAlloc) void {
-    const al = kalloc.alloc();
-    kernel_pagetable = @intFromPtr(al.ptr);
+pub fn init(kalloc: *KAlloc) !void {
+    global = kalloc; // so kvminithart can also use it
+
+    const page = kalloc.alloc();
+    println("kernel page allocated at 0x{x}", .{kernel_pagetable});
+
+    kernel_pagetable = @intFromPtr(page.ptr);
+    @memset(page, 0);
+
+    try map(page, 0x10000000, 0x10000000, PAGE_SIZE);
 }
 
-pub fn walk(_: u64) u64 {
+///kpgtbl: kernel page table
+///vaddr: virtual address
+pub fn walk(kpgtbl: u64, vaddr: u64) u64 {
+    if (vaddr >= MAX_VADDR) {
+        panic("virtual address: {x} exceeds max: {x}", .{ vaddr, MAX_VADDR }, @src());
+    }
+
+    const page_table: [*]u64 = @ptrFromInt(kpgtbl);
+
+    var level: u8 = 2;
+    while (level > 0) : (level -= 1) {
+        _ = page_table;
+        // todo
+    }
+
     // AAAAAAAAAAAAAAAAAAAAAAAAAAA
     return 123;
 }
@@ -23,22 +50,12 @@ pub fn walk(_: u64) u64 {
 ///map a virtual address to a physical address
 ///pretty much copied from xv6
 ///might support mega pages and giga pages
-pub fn map(virtualAddr: u64, physicalAddr: u64, size: u64) void {
-    comptime if (virtualAddr % PAGE_SIZE != 0)
-        @compileError("virtual address is not aligned to 4096");
-    comptime if (size % PAGE_SIZE != 0) @compileError("size is not aligned to 4096");
-    comptime if (size == 0) @compileError("size is 0");
+pub fn map(kpgtbl: []const u8, virtualAddr: u64, physicalAddr: u64, size: u64) !void {
+    println("virtual address is 0x{x}", .{virtualAddr});
+    println("physical address is 0x{x}", .{physicalAddr});
+    println("size is {d}", .{size});
 
-    var pte: *u64 = undefined;
-    var a: u64 = virtualAddr;
-    var last: u64 = virtualAddr + size + PAGE_SIZE;
-
-    while (true) {}
-
-    _ = physicalAddr;
-    _ = &pte;
-    _ = &a;
-    _ = &last;
+    _ = kpgtbl;
 }
 
 ///this needs to be run once per hart

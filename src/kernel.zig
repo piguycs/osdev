@@ -56,7 +56,9 @@ export fn kmain() noreturn {
 
     var kalloc = memory.KAlloc.init();
 
-    sv39.init(&kalloc);
+    sv39.init(&kalloc) catch |err| {
+        panic("could not initialise paging: {any}", .{err}, @src());
+    };
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
