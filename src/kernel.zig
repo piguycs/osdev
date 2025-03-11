@@ -56,18 +56,36 @@ export fn kmain() noreturn {
 
     var kalloc = memory.KAlloc.init();
 
-    sv39.init(&kalloc) catch |err| {
+    const memreq = [_]sv39.MemReq{
+        .{
+            .name = "HELLO WORLD",
+            .physicalAddr = 0x10000000,
+            .virtualAddr = 0x10000000,
+        },
+        .{
+            .name = "WORLD",
+            .physicalAddr = 0x20000000,
+            .virtualAddr = 0x20000000,
+            .numPages = 4,
+        },
+        .{
+            .name = "NO WORLD",
+            .physicalAddr = 0x30000000,
+            .virtualAddr = 0x30000000,
+            .numPages = 2,
+        },
+    };
+
+    sv39.init(&kalloc, &memreq) catch |err| {
         panic("could not initialise paging: {any}", .{err}, @src());
     };
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
 
-    for (0..NCPU) |id| {
-        _ = sbi.HartStateManagement.hart_start(id, null);
-    }
-
-    shell.kshell();
+    // for (0..NCPU) |id| {
+    //     _ = sbi.HartStateManagement.hart_start(id, null);
+    // }
 
     ksecond();
 }
@@ -75,7 +93,6 @@ export fn kmain() noreturn {
 // second stage of kmain. sets up hart specific stuff
 export fn ksecond() noreturn {
     sv39.inithart();
-
     kwait();
 }
 

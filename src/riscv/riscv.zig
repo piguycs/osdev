@@ -26,20 +26,15 @@ pub inline fn sfence_vma() void {
     asm volatile ("sfence.vma zero, zero");
 }
 
-pub const Satp = packed struct {
-    mode: u4,
-    asid: u16,
-    ppn: u44,
-};
-
-pub const Mode = enum(u4) {
+pub const Mode = enum(u64) {
     Sv39 = 8,
 };
 
+const SATP_MODE_SV39 = 8;
+const SATP_MODE_SHIFT = 60;
+const PAGE_SHIFT = 12;
+
 pub inline fn set_satp(mode: Mode, pagetable: u64) void {
-    csrw("satp", @bitCast(Satp{
-        .mode = @intFromEnum(mode),
-        .asid = 0,
-        .ppn = @truncate(pagetable >> 12),
-    }));
+    const value = @intFromEnum(mode) << SATP_MODE_SHIFT | pagetable >> PAGE_SHIFT;
+    csrw("satp", value);
 }
