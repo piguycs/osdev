@@ -139,6 +139,8 @@ fn runDiagnostics(dev: *Device) void {
         properties[3].value.Integer,
         properties[4].value.Integer,
     });
+
+    global_display.test_pattern();
 }
 
 //
@@ -271,6 +273,9 @@ pub const BochsDisplay = struct {
             }, // This will be set later via set_mode
             .framebuffer = @as([*]volatile u8, @ptrFromInt(fb_bar.base)),
         };
+
+        global_display.test_pattern();
+
         return &global_display;
     }
 

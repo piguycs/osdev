@@ -99,34 +99,36 @@ export fn kmain() noreturn {
         panic("No FDT header available", .{}, @src());
     }
 
-    var kalloc = memory.KAlloc.init();
+    // var kalloc = memory.KAlloc.init();
 
-    const memreq = [_]sv39.MemReq{
-        .{
-            .name = "HELLO WORLD",
-            .physicalAddr = 0x10000000,
-            .virtualAddr = 0x10000000,
-        },
-        .{
-            .name = "WORLD",
-            .physicalAddr = 0x20000000,
-            .virtualAddr = 0x20000000,
-            .numPages = 4,
-        },
-        .{
-            .name = "NO WORLD",
-            .physicalAddr = 0x30000000,
-            .virtualAddr = 0x30000000,
-            .numPages = 2,
-        },
-    };
+    // const memreq = [_]sv39.MemReq{
+    //     .{
+    //         .name = "KERNEL",
+    //         .physicalAddr = 0x80200000,
+    //         .virtualAddr = 0x80200000,
+    //     },
+    //     .{
+    //         .name = "WORLD",
+    //         .physicalAddr = 0x20000000,
+    //         .virtualAddr = 0x20000000,
+    //         .numPages = 4,
+    //     },
+    //     .{
+    //         .name = "PCI",
+    //         .physicalAddr = 0x40000000,
+    //         .virtualAddr = 0x40000000,
+    //         .numPages = 8192,
+    //     },
+    // };
 
-    sv39.init(&kalloc, &memreq) catch |err| {
-        panic("could not initialise paging: {any}", .{err}, @src());
-    };
+    // sv39.init(&kalloc, &memreq) catch |err| {
+    //     panic("could not initialise paging: {any}", .{err}, @src());
+    // };
+    // sv39.inithart();
+    println("Paging initialized", .{});
 
-    // const time = riscv.csrr("time");
-    // _ = sbi.TimeExt.set_timer(time + 10000000);
+    const time = riscv.csrr("time");
+    _ = sbi.TimeExt.set_timer(time + 10000000);
 
     // for (0..NCPU) |id| {
     //     _ = sbi.HartStateManagement.hart_start(id, null);
@@ -135,12 +137,15 @@ export fn kmain() noreturn {
     // Initialize device discovery system
     device_discovery.init();
 
+    device_manager.printDeviceTree();
+
+    shell.kshell();
+
     ksecond();
 }
 
 // second stage of kmain. sets up hart specific stuff
 export fn ksecond() noreturn {
-    sv39.inithart();
     kwait();
 }
 

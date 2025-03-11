@@ -65,16 +65,16 @@ pub fn findDriver(vendor_id: u16, device_id: u16, class: u8, subclass: u8) ?*con
 
     for (drivers[0..driver_count]) |maybe_driver| {
         if (maybe_driver) |driver| {
-            println("Checking driver: {s}", .{driver.name});
+            // println("Checking driver: {s}", .{driver.name});
             // Check each ID in the driver's supported ID list
             for (driver.ids) |id| {
-                println("  Checking ID: vendor={x:0>4} device={x:0>4}", .{ id.vendor_id, id.device_id });
-                if (id.class_code) |expected_class| {
-                    println("    Class: expected={x:0>2} got={x:0>2}", .{ expected_class, class });
-                }
-                if (id.subclass) |expected_subclass| {
-                    println("    Subclass: expected={x:0>2} got={x:0>2}", .{ expected_subclass, subclass });
-                }
+                // println("  Checking ID: vendor={x:0>4} device={x:0>4}", .{ id.vendor_id, id.device_id });
+                // if (id.class_code) |expected_class| {
+                //     println("    Class: expected={x:0>2} got={x:0>2}", .{ expected_class, class });
+                // }
+                // if (id.subclass) |expected_subclass| {
+                //     println("    Subclass: expected={x:0>2} got={x:0>2}", .{ expected_subclass, subclass });
+                // }
 
                 if (id.vendor_id == vendor_id and id.device_id == device_id) {
                     // If class/subclass are specified, they must match

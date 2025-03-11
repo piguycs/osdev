@@ -1,13 +1,13 @@
 const std = @import("std");
 
 pub const QEMU_OPTS = .{
-    "qemu-system-riscv64", //"-nographic",
+    "qemu-system-riscv64", // "-nographic",
     "-machine",
     "virt",
     "-smp",
     "4",
     "-m",
-    "8G",
+    "2G",
     "-bios",
     "default",
     "-kernel",
@@ -21,6 +21,10 @@ pub const QEMU_OPTS = .{
     "chardev=char0",
     "-device",
     "bochs-display",
+    "-device",
+    "qemu-xhci,id=xhci,bus=pcie.0,addr=0x8",
+    "-device",
+    "usb-kbd,bus=xhci.0",
 };
 
 pub const QEMU_DBG = QEMU_OPTS ++ .{ "-s", "-S" };
