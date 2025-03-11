@@ -2,9 +2,9 @@
 
 ## TODO
 
-- [ ] std-compatible page allocator
-- [ ] buddy allocator (sexually transmitted)
-- [ ] sv39 (do theory and then impl)
+- [x] sv39
+- [ ] buddy allocator
+- [ ] std-compatible allocator
 
 ## Dependencies
 
