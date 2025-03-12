@@ -16,13 +16,11 @@ pub const QEMU_OPTS = .{
 pub const QEMU_DBG = QEMU_OPTS ++ .{ "-s", "-S" };
 
 pub fn build(b: *std.Build) !void {
-    const target_conf = .{
+    const target = b.standardTargetOptions(.{ .default_target = .{
         .cpu_arch = .riscv64,
         .abi = .none,
         .os_tag = .freestanding,
-    };
-
-    const target = b.standardTargetOptions(.{ .default_target = target_conf });
+    } });
     const optimize = b.standardOptimizeOption(.{});
 
     const kernel = b.addExecutable(.{
@@ -33,13 +31,14 @@ pub fn build(b: *std.Build) !void {
         .code_model = .medium,
     });
 
-    kernel.setLinkerScriptPath(b.path("linker.ld"));
+    kernel.setLinkerScript(b.path("linker.ld"));
     try addAllAssemblyFiles(b, kernel); // adds all files from asm/
 
     b.installArtifact(kernel);
 
     runWithQemuCmd(b);
     objdumpCmd(b);
+    cleanCmd(b);
 }
 
 fn runWithQemuCmd(b: *std.Build) void {
@@ -48,14 +47,27 @@ fn runWithQemuCmd(b: *std.Build) void {
     if (b.args) |args| run_cmd.addArgs(args);
 
     const step = b.step("run", "Run kernel with QEMU");
-    step.dependOn(&run_cmd.step);
+    step.dependOn(panicAnalyseStep(b, &run_cmd.step));
 
     const run_dbg_cmd = b.addSystemCommand(&QEMU_DBG);
     run_dbg_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_dbg_cmd.addArgs(args);
 
     const step_dbg = b.step("run-dbg", "Run kernel with QEMU in debug mode (gdb server on :1234)");
-    step_dbg.dependOn(&run_dbg_cmd.step);
+    step_dbg.dependOn(panicAnalyseStep(b, &run_dbg_cmd.step));
+}
+
+fn panicAnalyseStep(b: *std.Build, runcmd: *std.Build.Step) *std.Build.Step {
+    const cmd = b.addSystemCommand(&.{
+        "sh", "-c",
+        \\if grep -q "PANIC: sepc=" zig-out/serial.log 2>/dev/null; then
+        \\  ADDR=$(grep "PANIC: sepc=" zig-out/serial.log | head -1 | sed -E 's/.*sepc=0x([^ ]+).*/0x\1/')
+        \\  llvm-addr2line -e zig-out/bin/kernel $ADDR
+        \\fi
+    });
+    cmd.step.dependOn(runcmd);
+
+    return &cmd.step;
 }
 
 fn objdumpCmd(b: *std.Build) void {
@@ -83,4 +95,10 @@ fn addAllAssemblyFiles(b: *std.Build, kernel: *std.Build.Step.Compile) !void {
             kernel.addAssemblyFile(b.path(asm_path));
         }
     }
+}
+
+fn cleanCmd(b: *std.Build) void {
+    const clean_step = b.step("clean", "Clean up");
+    clean_step.dependOn(&b.addRemoveDirTree(b.path("zig-out")).step);
+    clean_step.dependOn(&b.addRemoveDirTree(b.path(".zig-cache")).step);
 }
