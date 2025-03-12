@@ -99,6 +99,6 @@ fn addAllAssemblyFiles(b: *std.Build, kernel: *std.Build.Step.Compile) !void {
 
 fn cleanCmd(b: *std.Build) void {
     const clean_step = b.step("clean", "Clean up");
-    clean_step.dependOn(&b.addRemoveDirTree(b.path("zig-out")).step);
-    clean_step.dependOn(&b.addRemoveDirTree(b.path(".zig-cache")).step);
+    clean_step.dependOn(&b.addRemoveDirTree(.{ .cwd_relative = "zig-out" }).step);
+    clean_step.dependOn(&b.addRemoveDirTree(.{ .cwd_relative = ".zig-cache" }).step);
 }
