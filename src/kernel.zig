@@ -65,7 +65,7 @@ export fn kmain() noreturn {
             .name = "KERNEL",
             .physicalAddr = 0x80200000,
             .virtualAddr = 0x80200000,
-            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000) / 4096),
+            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000)) / 4096,
         },
     };
 
