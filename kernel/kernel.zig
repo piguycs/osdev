@@ -26,6 +26,7 @@ const NCPU = 4;
 pub const std_options = std.Options{
     .logFn = @import("core").log.stdLogAdapter,
 };
+const log = std.log.scoped(.kernel);
 
 extern const end: u8;
 
@@ -33,7 +34,7 @@ export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
 export fn start(hartid: u64, dtb_ptr: u64) void {
-    std.log.info("HELLO {s}", .{"WORLD"});
+    log.info("HELLO {s}", .{"WORLD"});
 
     riscv.enable_all_sie();
 

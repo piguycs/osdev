@@ -1,7 +1,8 @@
 const std = @import("std");
-const riscv = @import("../riscv/riscv.zig");
+const riscv = @import("riscv");
 const sync = @import("sync.zig");
 
+const StackTrace = std.builtin.StackTrace;
 const SpinLock = sync.SpinLock;
 const sbi = riscv.sbi;
 
@@ -33,12 +34,12 @@ pub fn stdLogAdapter(
     args: anytype,
 ) void {
     const lvlStr = switch (level) {
-        .debug => "[DBG]",
-        .info => "[INF]",
-        .warn => "[WRN]",
-        .err => "[ERR]",
+        .debug => "DEBUG",
+        .info => "INFO",
+        .warn => "WARN",
+        .err => "ERROR",
     };
 
-    _ = scope;
-    println(lvlStr ++ " " ++ format, args);
+    const scopeStr = @tagName(scope);
+    println("[{s} {s}] " ++ format, .{ lvlStr, scopeStr } ++ args);
 }
