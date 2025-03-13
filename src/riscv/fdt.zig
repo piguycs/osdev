@@ -1,5 +1,7 @@
 const std = @import("std");
 const writer = @import("../utils/writer.zig");
+const device = @import("../devices/device.zig");
+const manager = @import("../devices/manager.zig");
 const println = writer.println;
 const print = writer.print;
 
@@ -722,40 +724,40 @@ pub fn print_fdt() void {
         debugPrint("Memory section complete, continuing to devices", .{});
         // Continue with rest of FDT info...
         println("\nDevices:", .{});
-        for (device_buffer[0..device_count], 0..) |device, i| {
+        for (device_buffer[0..device_count], 0..) |dev, i| {
             println("  Device {}:", .{i});
-            println("    Compatible: {s}", .{device.compatible});
-            if (device.model) |model| {
+            println("    Compatible: {s}", .{dev.compatible});
+            if (dev.model) |model| {
                 println("    Model: {s}", .{model});
             }
-            if (device.reg_base) |base| {
+            if (dev.reg_base) |base| {
                 println("    Base Address: 0x{x:0>16}", .{base});
             }
-            if (device.reg_size) |size| {
+            if (dev.reg_size) |size| {
                 println("    Size: {} bytes", .{size});
             }
-            println("    Status: {s}", .{device.status});
+            println("    Status: {s}", .{dev.status});
 
             // Print raw compatible string to see if it contains multiple entries
             println("    Raw Compatible String: ", .{});
-            var compat_iter = std.mem.split(u8, device.compatible, ",");
+            var compat_iter = std.mem.split(u8, dev.compatible, ",");
             while (compat_iter.next()) |compat| {
                 println("      - {s}", .{compat});
             }
 
             // Print all properties for this device
             println("    Properties:", .{});
-            if (device.reg_base != null or device.reg_size != null) {
+            if (dev.reg_base != null or dev.reg_size != null) {
                 println("      reg:", .{});
-                println("        base: 0x{x:0>16}", .{device.reg_base.?});
-                println("        size: 0x{x:0>16}", .{device.reg_size.?});
+                println("        base: 0x{x:0>16}", .{dev.reg_base.?});
+                println("        size: 0x{x:0>16}", .{dev.reg_size.?});
             }
 
             // Print ranges property if this is a PCI device
-            if (std.mem.indexOf(u8, device.compatible, PCI_NODE_COMPATIBLE) != null) {
+            if (std.mem.indexOf(u8, dev.compatible, PCI_NODE_COMPATIBLE) != null) {
                 println("      ranges:", .{});
                 // Parse and display ranges data
-                if (device.ranges) |ranges| {
+                if (dev.ranges) |ranges| {
                     var range_idx: usize = 0;
                     while (range_idx + 24 <= ranges.len) {
                         const flags = parse32(ranges[range_idx..].ptr);
@@ -773,10 +775,10 @@ pub fn print_fdt() void {
                 }
             }
 
-            if (device.model != null) {
-                println("      model: {s}", .{device.model.?});
+            if (dev.model != null) {
+                println("      model: {s}", .{dev.model.?});
             }
-            println("      status: {s}", .{device.status});
+            println("      status: {s}", .{dev.status});
         }
 
         // Print PCI bridge info if found
@@ -837,30 +839,37 @@ fn parsePCIRanges(data: []const u8) void {
             size,
         });
 
+        // PCI range types:
+        // 0x01000000 = I/O space
+        // 0x02000000 = 32-bit memory space
+        // 0x03000000 = 64-bit memory space
         const range_type = flags & 0x03000000;
-        const space = flags & 0x03;
 
         switch (range_type) {
             0x01000000 => { // IO space
                 bridge.io_base = cpu_addr;
                 bridge.io_size = size;
+                debugPrint("Found PCI I/O space: base=0x{x} size=0x{x}", .{ cpu_addr, size });
             },
             0x02000000 => { // 32-bit memory space
                 bridge.mem_base = cpu_addr;
                 bridge.mem_size = size;
+                debugPrint("Found PCI 32-bit memory space: base=0x{x} size=0x{x}", .{ cpu_addr, size });
             },
             0x03000000 => { // 64-bit memory space
                 bridge.mem_base = cpu_addr;
                 bridge.mem_size = size;
-            },
-            0x00000000 => { // Configuration space
-                if (space == 0x02) { // Type 1 configuration space
-                    bridge.cfg_base = cpu_addr;
-                    bridge.cfg_size = size;
-                }
+                debugPrint("Found PCI 64-bit memory space: base=0x{x} size=0x{x}", .{ cpu_addr, size });
             },
             else => {
-                debugPrint("Unknown PCI range type: 0x{x}", .{flags});
+                // Configuration space - look for type 1
+                if ((flags & 0x03) == 0x02) {
+                    bridge.cfg_base = cpu_addr;
+                    bridge.cfg_size = size;
+                    debugPrint("Found PCI config space: base=0x{x} size=0x{x}", .{ cpu_addr, size });
+                } else {
+                    debugPrint("Unknown PCI range type: 0x{x}", .{flags});
+                }
             },
         }
 
@@ -869,11 +878,13 @@ fn parsePCIRanges(data: []const u8) void {
 
     // Look for config space in reg property if not found in ranges
     if (bridge.cfg_base == 0) {
-        for (device_buffer[0..device_count]) |device| {
-            if (std.mem.indexOf(u8, device_buffer[device_count - 1].compatible, PCI_NODE_COMPATIBLE) != null) {
-                if (device.reg_base) |base| {
+        debugPrint("Config space not found in ranges, checking device reg property", .{});
+        for (device_buffer[0..device_count]) |pci_dev| {
+            if (std.mem.indexOf(u8, pci_dev.compatible, PCI_NODE_COMPATIBLE) != null) {
+                debugPrint("Found PCI host bridge device", .{});
+                if (pci_dev.reg_base) |base| {
                     bridge.cfg_base = base;
-                    if (device.reg_size) |size| {
+                    if (pci_dev.reg_size) |size| {
                         bridge.cfg_size = size;
                     }
                     break;
@@ -882,10 +893,21 @@ fn parsePCIRanges(data: []const u8) void {
         }
     }
 
+    // Default PCI memory space if not found
+    if (bridge.mem_base == 0) {
+        bridge.mem_base = 0x40000000; // Default QEMU PCI memory base
+        bridge.mem_size = 0x40000000; // 1GB default size
+        debugPrint("[VIRT] Using default PCI memory space: base=0x{x} size=0x{x}", .{
+            bridge.mem_base,
+            bridge.mem_size,
+        });
+    }
+
     // Emulated bridge, doesn't always have the correct range
     if (bridge.cfg_base == 0 or bridge.cfg_base == 0x80000000) {
-        debugPrint("[VIRT] Overriding PCI config base to 0x30000000\n", .{});
+        debugPrint("[VIRT] Overriding PCI config base to 0x30000000", .{});
         bridge.cfg_base = 0x30000000;
+        bridge.cfg_size = 0x10000000; // 256MB config space
     }
 
     if (bridge.cfg_base != 0 and bridge.cfg_size != 0) {
@@ -896,6 +918,44 @@ fn parsePCIRanges(data: []const u8) void {
             bridge.mem_size,
         });
         pci_bridge = bridge;
+
+        // Create and register PCI host bridge device
+        var properties_array = [_]device.DeviceProperty{
+            .{
+                .name = "cfg_base",
+                .property_type = .Integer,
+                .value = .{ .Integer = bridge.cfg_base },
+            },
+            .{
+                .name = "cfg_size",
+                .property_type = .Integer,
+                .value = .{ .Integer = bridge.cfg_size },
+            },
+            .{
+                .name = "mem_base",
+                .property_type = .Integer,
+                .value = .{ .Integer = bridge.mem_base },
+            },
+            .{
+                .name = "mem_size",
+                .property_type = .Integer,
+                .value = .{ .Integer = bridge.mem_size },
+            },
+        };
+
+        var bridge_device = device.Device{
+            .name = "pci-host-bridge",
+            .class = .Bridge,
+            .status = .Active,
+            .properties = &properties_array,
+            .parent = null,
+            .children = &[_]device.Device{},
+        };
+
+        // Register the device
+        manager.registerDevice(&bridge_device) catch |err| {
+            debugPrint("Failed to register PCI host bridge: {}", .{err});
+        };
     }
 }
 

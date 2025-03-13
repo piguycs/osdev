@@ -81,9 +81,12 @@ fn cmd_echo(args: []const []const u8) void {
 }
 
 fn cmd_lspci(args: []const []const u8) void {
-    _ = args;
     const pci = @import("../drivers/pci.zig");
-    pci.enumerate_devices();
+    if (args.len > 1 and std.mem.eql(u8, args[1], "-v")) {
+        pci.enumerate_devices_debug();
+    } else {
+        pci.enumerate_devices_show_only();
+    }
 }
 
 fn cmd_fdt(args: []const []const u8) void {

@@ -1,6 +1,7 @@
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
 const writer = @import("utils/writer.zig");
+const xhci = @import("drivers/xhci.zig");
 
 const panic = writer.panic;
 const println = writer.println;
@@ -15,7 +16,10 @@ const Cause = enum(u64) {
 };
 
 ///stub function, does nothing
-pub fn init() void {}
+pub fn init() void {
+    // Enable external interrupts in SIE
+    riscv.csrw("sie", riscv.csrr("sie") | (1 << 9)); // SEIE bit
+}
 
 ///# trap handler
 ///a trap captures all interrupts and exceptipns. If it is an exception, we
@@ -26,11 +30,15 @@ export fn trap() void {
     const sstatus = riscv.csrr("sstatus");
     const scause = riscv.csrr("scause");
 
-    // this is gonna be important for scheduling
+    // Handle different interrupt types
     if (scause == @intFromEnum(Cause.Timer)) {
-        // println("timer hit", .{});
+        // Timer interrupt
         const time = riscv.csrr("time");
         _ = sbi.TimeExt.set_timer(time + 10000000);
+        return;
+    } else if (scause == @intFromEnum(Cause.External)) {
+        // External interrupt - check if it's from XHCI
+        xhci.handleInterrupt();
         return;
     }
 

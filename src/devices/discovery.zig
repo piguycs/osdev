@@ -7,6 +7,7 @@ const pci = @import("../drivers/pci.zig");
 
 // Import drivers
 const bochs_display = @import("../drivers/bochs_display.zig");
+const xhci = @import("../drivers/xhci.zig");
 
 const println = writer.println;
 
@@ -18,6 +19,7 @@ pub fn init() void {
 
     // Register known drivers
     bochs_display.register();
+    xhci.register();
 
     // Initialize PCI subsystem
     pci.init();

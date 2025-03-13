@@ -57,7 +57,51 @@ export fn kmain() noreturn {
 
     trap.init();
     writer.init();
-    device_manager.init();
+
+    // Initialize FDT
+    if (fdt_header_addr) |header| {
+        fdt.init(header, false) catch |err| {
+            println("Failed to initialize FDT: {}", .{err});
+            panic("FDT initialization failed", .{}, @src());
+        };
+
+        // Print FDT contents
+        // fdt.print_fdt();
+
+        // Print memory info with safety checks
+        const total_mem = fdt.getTotalMemory();
+        println("Debug: Got total memory: 0x{x}", .{total_mem});
+
+        // Dump memory regions for debugging
+        fdt.dumpMemoryRegions();
+
+        const max_addr = fdt.getMaxMemoryAddress();
+        if (max_addr > 0) {
+            println("Maximum memory address: 0x{x}", .{max_addr});
+        } else {
+            println("Warning: Could not determine maximum memory address", .{});
+        }
+
+        // Log memory regions with safety checks
+        const regions = fdt.getMemoryRegions();
+        println("Debug: Found {} memory regions", .{regions.len});
+
+        for (regions) |region| {
+            if (region.size >= 1024 * 1024) {
+                println("Memory region: base=0x{x} size={d} MB", .{
+                    region.base,
+                    @divFloor(region.size, 1024 * 1024),
+                });
+            } else {
+                println("Memory region: base=0x{x} size={d} bytes", .{
+                    region.base,
+                    region.size,
+                });
+            }
+        }
+    } else {
+        panic("No FDT header available", .{}, @src());
+    }
 
     println("kalloc", .{});
     var kalloc = memory.KAlloc.init();
@@ -68,7 +112,35 @@ export fn kmain() noreturn {
             .name = "KERNEL",
             .physicalAddr = 0x80200000,
             .virtualAddr = 0x80200000,
-            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000) / 4096),
+            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000)) / 4096,
+        },
+        // PCI Config Space - 256MB
+        .{
+            .name = "PCI-CFG",
+            .physicalAddr = 0x30000000,
+            .virtualAddr = 0x30000000,
+            .numPages = 65536, // 256MB = 65536 pages
+        },
+        // PCI Memory Space - Map entire region 1:1
+        .{
+            .name = "PCI-MEM",
+            .physicalAddr = 0x40000000,
+            .virtualAddr = 0x40000000,
+            .numPages = 65536, // 256MB = 65536 pages (reduced from 4GB)
+        },
+        // Graphics - Map after PCI memory space
+        .{
+            .name = "GRAFIX",
+            .physicalAddr = 0x90000000,
+            .virtualAddr = 0x90000000,
+            .numPages = 8192, // 32MB for framebuffer and MMIO
+        },
+        // XHCI - Map in valid physical memory
+        .{
+            .name = "XHCI",
+            .physicalAddr = 0x60000000, // Place after kernel in physical memory
+            .virtualAddr = 0x60000000, // Use same address for virtual mapping
+            .numPages = 65536, // 256MB = 65536 pages
         },
     };
 
@@ -84,6 +156,8 @@ export fn kmain() noreturn {
     // for (0..NCPU) |id| {
     //     _ = sbi.HartStateManagement.hart_start(id, null);
     // }
+
+    device_manager.init(&kalloc);
 
     // Initialize device discovery system
     device_discovery.init();

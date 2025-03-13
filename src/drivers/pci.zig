@@ -140,6 +140,7 @@ pub const PCI_CLASS_WIRELESS = 0x0D;
 pub const PCI_CLASS_SATELLITE = 0x0F;
 pub const PCI_CLASS_ENCRYPTION = 0x10;
 pub const PCI_CLASS_SIGNAL_PROCESSING = 0x11;
+pub const PCI_CLASS_USB = 0x0C;
 
 // PCI Bridge Subclasses
 pub const PCI_SUBCLASS_HOST_BRIDGE = 0x00;
@@ -151,6 +152,13 @@ pub const PCI_SUBCLASS_PCMCIA_BRIDGE = 0x05;
 pub const PCI_SUBCLASS_NUBUS_BRIDGE = 0x06;
 pub const PCI_SUBCLASS_CARDBUS_BRIDGE = 0x07;
 
+// Serial Bus Controller (0x0C) Subclasses
+pub const PCI_SUBCLASS_USB = 0x03; // USB Controller
+pub const PCI_SUBCLASS_USB_UHCI = 0x00; // UHCI USB Controller
+pub const PCI_SUBCLASS_USB_OHCI = 0x10; // OHCI USB Controller
+pub const PCI_SUBCLASS_USB_EHCI = 0x20; // EHCI USB 2.0 Controller
+pub const PCI_SUBCLASS_USB_XHCI = 0x30; // XHCI USB 3.0 Controller
+
 // BAR (Base Address Register) related constants
 pub const PCI_BAR0: u8 = 0x10; // First BAR register
 pub const PCI_BAR_IO_SPACE: u1 = 0x1; // If bit 0 is 1, it's an I/O BAR
@@ -159,6 +167,9 @@ pub const PCI_BAR_PREFETCH: u1 = 0x8; // If bit 3 is 1, memory is prefetchable
 
 // Add a flag to track if PCI is properly initialized
 var pci_initialized: bool = false;
+
+// Track allocated memory regions
+var next_mem_base: u64 = 0x40000000; // Start of PCI memory space
 
 pub fn init() void {
     println("Initializing PCI subsystem...", .{});
@@ -235,25 +246,96 @@ pub fn write_config(bus: u8, device: u8, function: u8, register: u8, value: u32)
     ptr.* = value;
 }
 
+pub fn enumerate_devices_show_only() void {
+    if (!pci_initialized) {
+        println("PCI not properly initialized, skipping enumeration", .{});
+        return;
+    }
+
+    const device = @import("../devices/device.zig");
+
+    // Scan buses 0-2 for now
+    for ([_]u8{ 0, 1, 2 }) |bus| {
+        var dev: u8 = 0;
+        while (dev < 32) : (dev += 1) {
+            var func: u8 = 0;
+            while (func < 8) : (func += 1) {
+                const vendor_id = get_device_vendor_id(bus, dev, func);
+                const device_id = get_device_device_id(bus, dev, func);
+
+                if (vendor_id != PCI_INVALID_VENDOR and device_id != PCI_INVALID_DEVICE) {
+                    const info = get_device_info(bus, dev, func);
+
+                    // Format like Linux lspci:
+                    // "00:00.0 Class Name: Vendor Name Device Name"
+                    println("{x:0>2}:{x:0>2}.{x:0>1} {s}: Vendor {x:0>4} Device {x:0>4}", .{ bus, dev, func, switch (info.class_code) {
+                        0x00 => device.DeviceClass.Unknown.toString(),
+                        0x01 => device.DeviceClass.Block.toString(),
+                        0x02 => device.DeviceClass.Network.toString(),
+                        0x03 => device.DeviceClass.Display.toString(),
+                        0x04 => "Multimedia Controller",
+                        0x05 => device.DeviceClass.Memory.toString(),
+                        0x06 => device.DeviceClass.Bridge.toString(),
+                        0x07 => device.DeviceClass.Serial.toString(),
+                        0x08 => "Base System Peripheral",
+                        0x09 => device.DeviceClass.Input.toString(),
+                        0x0a => "Docking Station",
+                        0x0b => "Processor",
+                        0x0c => "Serial Bus Controller",
+                        0x0d => "Wireless Controller",
+                        0x0e => "Intelligent Controller",
+                        0x0f => "Satellite Communication Controller",
+                        0x10 => "Encryption Controller",
+                        0x11 => "Signal Processing Controller",
+                        else => device.DeviceClass.Unknown.toString(),
+                    }, vendor_id, device_id });
+                }
+            }
+        }
+    }
+}
+
 pub fn enumerate_devices() void {
     if (!pci_initialized) {
         println("PCI not properly initialized, skipping enumeration", .{});
         return;
     }
 
-    // Start with bus 0 only - don't recurse into bridges yet
-    enumerate_bus(0);
+    // TODO: Handle more busses and bridges
+    enumerate_bus(0, false);
+    enumerate_bus(1, false);
+    enumerate_bus(2, false);
 }
 
-fn enumerate_bus(bus: u8) void {
+pub fn enumerate_devices_debug() void {
+    if (!pci_initialized) {
+        println("PCI not properly initialized, skipping enumeration", .{});
+        return;
+    }
+
+    // TODO: Handle more busses and bridges
+    enumerate_bus(0, true);
+    enumerate_bus(1, true);
+    enumerate_bus(2, true);
+}
+
+fn enumerate_bus(bus: u8, debug: bool) void {
+    if (debug) println("Enumerating PCI bus {}", .{bus});
     var dev: u8 = 0;
     while (dev < 32) : (dev += 1) {
         var func: u8 = 0;
         while (func < 8) : (func += 1) {
             const vendor_id = get_device_vendor_id(bus, dev, func);
             const device_id = get_device_device_id(bus, dev, func);
+
+            // Add debug output
+            if (vendor_id != PCI_INVALID_VENDOR and debug) {
+                println("Found device at {x:0>2}:{x:0>2}.{x:0>1} - vendor: {x:0>4} device: {x:0>4}", .{ bus, dev, func, vendor_id, device_id });
+            }
+
             if (vendor_id != PCI_INVALID_VENDOR and device_id != PCI_INVALID_DEVICE) {
                 const info = get_device_info(bus, dev, func);
+                if (debug) println("  Class: {x:0>2} Subclass: {x:0>2}", .{ info.class_code, info.subclass });
 
                 // Call discovery callback if registered
                 if (discovery_callback) |callback| {
@@ -265,7 +347,7 @@ fn enumerate_bus(bus: u8) void {
                     if (info.secondary_bus) |secondary_bus| {
                         // Only enumerate if secondary bus is different from current
                         if (secondary_bus != bus) {
-                            enumerate_bus(secondary_bus);
+                            enumerate_bus(secondary_bus, debug);
                         }
                     }
                 }
@@ -420,22 +502,36 @@ pub fn get_bar_info(bus: u8, device: u8, function: u8, bar_num: u8) struct { bas
         // For memory BARs, check if we need to assign an address
         var raw_base = orig_bar & 0xFFFFFFF0;
 
-        // If it's the Bochs display, use known good addresses
-        const vendor_id = get_device_vendor_id(bus, device, function);
-        const device_id = get_device_device_id(bus, device, function);
-        if (raw_base == 0x0 or (vendor_id == 0x1234 and device_id == 0x1111)) {
-            const addr: u32 = switch (bar_num) {
-                0 => 0x40000000, // Framebuffer
-                2 => 0x41000000, // MMIO
-                else => 0,
-            };
-            if (addr != 0) {
-                write_config(bus, device, function, bar_offset, addr);
-                // Verify the write took effect
-                const new_bar = read_config(bus, device, function, bar_offset);
-                raw_base = new_bar & 0xFFFFFFF0;
-                println("BAR{}: Assigned address 0x{x:0>8}, read back 0x{x:0>8}", .{ bar_num, addr, raw_base });
+        // If BAR needs assignment (is 0 or conflicts with known devices)
+        if (raw_base == 0x0) {
+            // Align next_mem_base to size
+            const alignment = size;
+            next_mem_base = (next_mem_base + alignment - 1) & ~(alignment - 1);
+
+            // Assign the address
+            const addr: u64 = next_mem_base;
+            next_mem_base += size; // Update for next allocation
+
+            // Ensure we don't exceed PCI memory space
+            if (next_mem_base > PCI_MEM_BASE + PCI_MEM_SIZE) {
+                println("Error: Out of PCI memory space", .{});
+                return .{ .base = 0, .size = 0 };
             }
+
+            // Write the new address
+            if (is_64bit) {
+                // For 64-bit BAR, write lower 32 bits
+                write_config(bus, device, function, bar_offset, @truncate(addr));
+                // Write upper 32 bits
+                write_config(bus, device, function, bar_offset + 4, @truncate(addr >> 32));
+            } else {
+                write_config(bus, device, function, bar_offset, @truncate(addr));
+            }
+
+            // Verify the write took effect
+            const new_bar = read_config(bus, device, function, bar_offset);
+            raw_base = new_bar & 0xFFFFFFF0;
+            println("BAR{}: Assigned address 0x{x:0>8}, read back 0x{x:0>8}", .{ bar_num, addr, raw_base });
         }
 
         base = raw_base;

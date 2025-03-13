@@ -2,10 +2,12 @@ const std = @import("std");
 const writer = @import("../utils/writer.zig");
 const device = @import("device.zig");
 const spinlock = @import("../spinlock.zig");
+const memory = @import("../memory.zig");
 
 const Device = device.Device;
 const DeviceClass = device.DeviceClass;
 const DeviceStatus = device.DeviceStatus;
+const KAlloc = memory.KAlloc;
 
 const println = writer.println;
 
@@ -25,9 +27,16 @@ pub const DeviceError = error{
 pub var devices: [MAX_DEVICES]?*Device = .{null} ** MAX_DEVICES;
 var device_count: usize = 0;
 var registry_lock: spinlock.Lock = undefined;
+var allocator: ?*KAlloc = null;
 
-pub fn init() void {
+pub fn getAllocator() *KAlloc {
+    return allocator orelse @panic("Device manager not initialized with allocator");
+}
+
+pub fn init(kalloc: *KAlloc) void {
     registry_lock = spinlock.Lock.new("device_manager");
+    allocator = kalloc;
+    println("Device manager initialized with allocator", .{});
 }
 
 pub fn registerDevice(dev: *Device) DeviceError!void {
