@@ -8,7 +8,7 @@ const panic = writer.panic;
 
 const PAGE_SIZE = 4096;
 // HACK: I am hardcoding these in for now
-const MEM_SIZE = 64 * 1024 * 1024; // 64M
+const MEM_SIZE = 128 * 1024 * 1024; // 64M
 const MEM_END = 0x80200000 + MEM_SIZE;
 
 pub const FreeList = struct {
@@ -59,6 +59,10 @@ pub const KAlloc = struct {
     }
 
     pub fn alloc(self: *KAlloc) []u8 {
+        return self.allocT(u8);
+    }
+
+    pub fn allocT(self: *KAlloc, comptime T: type) []T {
         self.lock.acquire();
         defer self.lock.release();
 
@@ -66,16 +70,21 @@ pub const KAlloc = struct {
 
         if (r) |node| {
             self.freelist.next = node.next;
-            const mem = @as([*]u8, @ptrCast(node))[0..PAGE_SIZE];
-            @memset(mem, 0);
-            return mem;
+
+            const items_count = PAGE_SIZE / @sizeOf(T);
+            const ptr = @as([*]T, @ptrCast(@alignCast(node)));
+            const slice = ptr[0..items_count];
+
+            @memset(@as([*]u8, @ptrCast(ptr))[0..PAGE_SIZE], 0);
+
+            return slice;
         }
 
         panic("out of memory", .{}, @src());
     }
 };
 
-fn pageRoundUp(input: u64) u64 {
+pub fn pageRoundUp(input: u64) u64 {
     comptime if ((PAGE_SIZE & (PAGE_SIZE - 1)) != 0) {
         @compileError("PAGE_SIZE must be a power of 2");
     };

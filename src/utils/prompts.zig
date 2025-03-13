@@ -9,7 +9,7 @@ const panic = writer.panic;
 
 const UTF_BACK = 0x08;
 const UTF_SPACE = 0x20;
-const UTF_TILDE = 0x7E; // we use this for backspace
+const UTF_BACKSPACE = 0x7F;
 const UTF_LF = 0x0A; // line feed
 const UTF_CR = 0x0D; // carriage return
 
@@ -43,7 +43,7 @@ pub fn prompt(args: Prompt) void {
 
         if (result.errno == .Success and result.value > 0) {
             for (str[0..result.value]) |char| {
-                if (char == UTF_TILDE and !args.simple) {
+                if (char == UTF_BACKSPACE and !args.simple) {
                     if (full_input_index > 0) {
                         full_input_index -= 1;
                         if (args.show_input) backspace();
@@ -77,8 +77,6 @@ pub fn prompt(args: Prompt) void {
                 }
             }
         }
-
-        asm volatile ("wfi");
     }
 
     if (args.clear_line) {

@@ -1,6 +1,7 @@
 const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
+const sv39 = @import("riscv/sv39.zig");
 
 const prompts = @import("utils/prompts.zig");
 const reader = @import("utils/reader.zig");
@@ -20,6 +21,8 @@ const shell_command = shell.shell_command;
 
 const NCPU = 4;
 
+extern const end: u8;
+
 export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
@@ -33,11 +36,12 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
-        println("info: assuming main thread for hart#{any}", .{hartid});
+        _ = hartid;
+        //println("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        println("info: assuming second thread for hart#{any}", .{hartid});
-        kwait();
+        //println("info: assuming second thread for hart#{any}", .{hartid});
+        ksecond();
     }
 }
 
@@ -52,8 +56,23 @@ export fn kmain() noreturn {
     trap.init();
     writer.init();
 
-    var alloc = memory.KAlloc.init();
-    _ = &alloc; // TODO: use this for processes etc
+    println("kalloc", .{});
+    var kalloc = memory.KAlloc.init();
+    println("done kalloc", .{});
+
+    const memreq = [_]sv39.MemReq{
+        .{
+            .name = "KERNEL",
+            .physicalAddr = 0x80200000,
+            .virtualAddr = 0x80200000,
+            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000)) / 4096,
+        },
+    };
+
+    sv39.init(&kalloc, &memreq) catch |err| {
+        panic("could not initialise paging: {any}", .{err}, @src());
+    };
+    sv39.inithart();
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
@@ -64,6 +83,12 @@ export fn kmain() noreturn {
 
     shell.kshell();
 
+    kwait();
+}
+
+// second stage of kmain. sets up hart specific stuff
+export fn ksecond() noreturn {
+    sv39.inithart();
     kwait();
 }
 

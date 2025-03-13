@@ -1,5 +1,12 @@
 # Simple OSDEV Project
 
+## TODO
+
+- [x] sv39
+- [ ] lazy freelist
+- [ ] buddy allocator
+- [ ] std-compatible allocator
+
 ## Dependencies
 
 - `zig`: 0.13.0
