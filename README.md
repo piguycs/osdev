@@ -6,7 +6,7 @@
 Plus some other structural changes
 - [x] make core and riscv functions available as a library
 - [x] read qemu launch commands from a file
-- [ ] make use of `std.log` (DRAFT STAGES)
+- [x] make use of `std.log` (DRAFT STAGES)
 
 ## Dependencies
 

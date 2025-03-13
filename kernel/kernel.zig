@@ -1,3 +1,5 @@
+const std = @import("std");
+
 const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
@@ -9,17 +11,11 @@ const writer = @import("utils/writer.zig");
 const shell = @import("utils/shell.zig");
 
 const memory = @import("memory.zig");
-const spinlock = @import("spinlock.zig");
 const trap = @import("trap.zig");
 
-const print = writer.print;
-const println = writer.println;
-const printchar = writer.printchar;
 const panic = writer.panic;
 const prompt = prompts.prompt;
 const shell_command = shell.shell_command;
-
-const std = @import("std");
 
 const NCPU = 4;
 
@@ -34,11 +30,6 @@ export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
 export fn start(hartid: u64, dtb_ptr: u64) void {
-    log.debug("HELLO {s}", .{"WORLD"});
-    log.info("HELLO {s}", .{"WORLD"});
-    log.warn("HELLO {s}", .{"WORLD"});
-    log.err("HELLO {s}", .{"WORLD"});
-
     riscv.enable_all_sie();
 
     if (fdt_header_addr == null) {
@@ -59,18 +50,18 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
 fn start_stuf(_: []const u8) void {
     // println("Prompt got: {s}", .{input});
-    println("Starting...", .{});
+    log.info("Starting...", .{});
 }
 
 export fn kmain() noreturn {
     writer.init();
     trap.init();
 
-    println("\nhello from kmain\n", .{});
+    log.info("\nhello from kmain\n", .{});
 
-    println("kalloc", .{});
+    log.debug("kalloc", .{});
     var kalloc = memory.KAlloc.init();
-    println("/kalloc", .{});
+    log.debug("/kalloc", .{});
 
     const memreq = [_]sv39.MemReq{
         .{
@@ -85,7 +76,7 @@ export fn kmain() noreturn {
         panic("could not initialise paging: {any}", .{err}, @src());
     };
     sv39.inithart();
-    println("done modafuka", .{});
+    log.debug("done modafuka", .{});
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);

@@ -1,4 +1,4 @@
-///DEPRACATED: use @import("core").sync.Spinlock
+//!DEPRACATED: use @import("core").sync.Spinlock
 pub const Lock = struct {
     name: []const u8,
     locked: bool, // we use u32 for atomic operations

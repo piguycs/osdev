@@ -5,6 +5,7 @@ const std = @import("std");
 const opts: struct {
     qemuOpts: []const []const u8,
     qemuDbgFlags: []const []const u8,
+    riscvFeatures: []const std.Target.riscv.Feature,
 } = @import("build-options.zon");
 
 pub fn build(b: *std.Build) !void {
@@ -12,6 +13,7 @@ pub fn build(b: *std.Build) !void {
         .cpu_arch = .riscv64,
         .abi = .none,
         .os_tag = .freestanding,
+        .cpu_features_add = std.Target.riscv.featureSet(opts.riscvFeatures),
     } });
     const optimize = b.standardOptimizeOption(.{});
 

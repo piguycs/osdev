@@ -12,4 +12,5 @@
         "-mon",                "chardev=char0",
     },
     .qemuDbgFlags = .{ "-s", "-S" },
+    .riscvFeatures = .{.zihintpause},
 }

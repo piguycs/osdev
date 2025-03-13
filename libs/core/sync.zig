@@ -7,7 +7,9 @@ pub const SpinLock = struct {
     }
 
     pub fn acquire(lock: *SpinLock) void {
-        while (@atomicRmw(bool, &lock.locked, .Xchg, true, .acquire) == true) {}
+        while (@atomicRmw(bool, &lock.locked, .Xchg, true, .acquire) == true) {
+            asm volatile ("pause");
+        }
     }
 
     pub fn release(lock: *SpinLock) void {
