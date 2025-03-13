@@ -13,9 +13,11 @@ const shell = @import("utils/shell.zig");
 const memory = @import("memory.zig");
 const trap = @import("trap.zig");
 
-const panic = core.log.panic;
+//const panic = core.log.panic;
 const prompt = prompts.prompt;
 const shell_command = shell.shell_command;
+
+pub const panic = std.debug.FullPanic(core.log.stdPanicAdapter);
 
 const NCPU = 4;
 
@@ -34,7 +36,7 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
 
     if (fdt_header_addr == null) {
         fdt_header_addr = @ptrFromInt(dtb_ptr);
-        if (!fdt_header_addr.?.isValid()) panic("fdt is invalid", .{}, @src());
+        if (!fdt_header_addr.?.isValid()) core.log.panic("fdt is invalid", .{}, @src());
 
         // enable supervisor timer interrupts
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
@@ -70,7 +72,7 @@ export fn kmain() noreturn {
     };
 
     sv39.init(&kalloc, &memreq) catch |err| {
-        panic("could not initialise paging: {any}", .{err}, @src());
+        core.log.panic("could not initialise paging: {any}", .{err}, @src());
     };
     sv39.inithart();
 

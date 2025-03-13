@@ -59,10 +59,6 @@ pub fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) nore
     hang();
 }
 
-export fn hang() noreturn {
-    while (true) {}
-}
-
 pub fn stdLogAdapter(
     comptime level: std.log.Level,
     comptime scope: @Type(.enum_literal),
@@ -85,4 +81,37 @@ pub fn stdLogAdapter(
 
     const scopeStr = @tagName(scope);
     println(colour ++ "[{s} {s}] " ++ format ++ Colour.reset, .{ lvlStr, scopeStr } ++ args);
+}
+
+pub fn stdPanicAdapter(msg: []const u8, first_trace_addr: ?usize) noreturn {
+    if (msg.len > 0) println("panic message: {s}", .{msg});
+
+    var addr = first_trace_addr orelse unreachable;
+    var fp = asm volatile (
+        \\nop
+        : [ret] "={fp}" (-> u64),
+    );
+
+    var depth: u64 = 0;
+    const max_depth = 10;
+
+    while (depth < max_depth) : (depth += 1) {
+        println("STACK TRACE:", .{});
+        println("{d:4}: 0x{x} fp: 0x{x}", .{ depth, addr, fp });
+        addr = @as(*u64, @ptrFromInt(fp - 8)).*;
+        fp = @as(*u64, @ptrFromInt(fp - 16)).*;
+    }
+
+    println("==== END OF STACK TRACE ====", .{});
+
+    asm volatile ("j .");
+    unreachable;
+}
+
+fn isValidAddress(_: usize) bool {
+    return true;
+}
+
+export fn hang() noreturn {
+    while (true) {}
 }
