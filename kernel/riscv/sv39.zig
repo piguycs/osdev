@@ -1,6 +1,6 @@
-const riscv = @import("../riscv/riscv.zig");
-const memory = @import("../memory.zig");
+const riscv = @import("riscv");
 const core = @import("core");
+const memory = @import("../memory.zig");
 
 const KAlloc = memory.KAlloc;
 const println = core.log.println;

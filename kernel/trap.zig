@@ -1,6 +1,7 @@
-const riscv = @import("riscv/riscv.zig");
-const sbi = @import("riscv/sbi.zig");
+const riscv = @import("riscv");
 const core = @import("core");
+
+const sbi = riscv.sbi;
 
 const panic = core.log.panic;
 const println = core.log.println;

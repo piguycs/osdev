@@ -1,17 +1,17 @@
 const std = @import("std");
 const core = @import("core");
+const riscv = @import("riscv");
 
-const fdt = @import("riscv/fdt.zig");
-const riscv = @import("riscv/riscv.zig");
-const sbi = @import("riscv/sbi.zig");
 const sv39 = @import("riscv/sv39.zig");
-
 const prompts = @import("utils/prompts.zig");
 const reader = @import("utils/reader.zig");
 const shell = @import("utils/shell.zig");
 
 const memory = @import("memory.zig");
 const trap = @import("trap.zig");
+
+const fdt = riscv.fdt;
+const sbi = riscv.sbi;
 
 const panic = core.log.panic;
 const prompt = prompts.prompt;

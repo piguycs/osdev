@@ -1,6 +1,8 @@
 const std = @import("std");
-const sbi = @import("../riscv/sbi.zig");
+const riscv = @import("riscv");
 const core = @import("core");
+
+const sbi = riscv.sbi;
 
 const SourceLocation = std.builtin.SourceLocation;
 const SpinLock = core.sync.SpinLock;

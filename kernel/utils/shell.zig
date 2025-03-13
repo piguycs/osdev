@@ -1,9 +1,11 @@
 const std = @import("std");
-const riscv = @import("../riscv/riscv.zig");
-const sbi = @import("../riscv/sbi.zig");
+const riscv = @import("riscv");
+const core = @import("core");
+
 const prompts = @import("prompts.zig");
 const reader = @import("reader.zig");
-const core = @import("core");
+
+const sbi = riscv.sbi;
 
 const print = core.log.print;
 const println = core.log.println;
