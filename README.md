@@ -3,6 +3,7 @@
 ## TODO
 
 - [x] sv39
+- [ ] lazy freelist
 - [ ] buddy allocator
 - [ ] std-compatible allocator
 
