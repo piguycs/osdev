@@ -1,13 +1,5 @@
 # Simple OSDEV Project
 
-## TODO
-
-- [x] Zig version 0.14.0
-Plus some other structural changes
-- [x] make core and riscv functions available as a library
-- [x] read qemu launch commands from a file
-- [x] make use of `std.log` (DRAFT STAGES)
-
 ## Dependencies
 
 - `zig`: 0.14.0
