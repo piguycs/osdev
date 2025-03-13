@@ -34,7 +34,10 @@ export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
 export fn start(hartid: u64, dtb_ptr: u64) void {
+    log.debug("HELLO {s}", .{"WORLD"});
     log.info("HELLO {s}", .{"WORLD"});
+    log.warn("HELLO {s}", .{"WORLD"});
+    log.err("HELLO {s}", .{"WORLD"});
 
     riscv.enable_all_sie();
 

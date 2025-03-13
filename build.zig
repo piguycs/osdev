@@ -105,55 +105,40 @@ fn addLibs(b: *std.Build, kernel: *std.Build.Step.Compile) !void {
     var dir = try std.fs.cwd().openDir(libDir, .{ .iterate = true });
     defer dir.close();
 
-    // First, create all modules
     var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
     defer modules.deinit();
 
-    // First pass: create all modules
-    {
-        var iterator = dir.iterate();
-        while (try iterator.next()) |entry| {
-            const path = try std.fmt.allocPrint(
-                b.allocator,
-                "{s}/{s}/{s}.zig",
-                .{ libDir, entry.name, entry.name },
-            );
+    var iterator = dir.iterate();
+    while (try iterator.next()) |entry| {
+        const path = try std.fmt.allocPrint(
+            b.allocator,
+            "{s}/{s}/{s}.zig",
+            .{ libDir, entry.name, entry.name },
+        );
 
-            const mod = b.createModule(.{
-                .root_source_file = b.path(path),
-            });
+        const mod = b.createModule(.{
+            .root_source_file = b.path(path),
+        });
 
-            try modules.put(entry.name, mod);
-        }
+        try modules.put(entry.name, mod);
     }
 
-    // Second pass: add dependencies between modules
-    {
-        var it = modules.iterator();
-        while (it.next()) |entry| {
-            const mod_name = entry.key_ptr.*;
-            const mod = entry.value_ptr.*;
+    // dependencies between modules
+    var it = modules.iterator();
+    while (it.next()) |entry| {
+        const mod_name = entry.key_ptr.*;
+        const mod = entry.value_ptr.*;
 
-            // Allow each module to access every other module
-            var deps_it = modules.iterator();
-            while (deps_it.next()) |dep_entry| {
-                const dep_name = dep_entry.key_ptr.*;
-                const dep_mod = dep_entry.value_ptr.*;
+        var deps_it = modules.iterator();
+        while (deps_it.next()) |dep_entry| {
+            const dep_name = dep_entry.key_ptr.*;
+            const dep_mod = dep_entry.value_ptr.*;
 
-                if (!std.mem.eql(u8, mod_name, dep_name)) {
-                    mod.addImport(dep_name, dep_mod);
-                }
+            if (!std.mem.eql(u8, mod_name, dep_name)) {
+                mod.addImport(dep_name, dep_mod);
             }
-
-            // Add module to kernel
-            kernel.root_module.addImport(mod_name, mod);
         }
-    }
-}
 
-fn addModule(b: *std.Build, kernel: *std.Build.Step.Compile, name: []const u8, path: []const u8) void {
-    const mod = b.addModule(name, .{
-        .root_source_file = b.path(path),
-    });
-    kernel.root_module.addImport(name, mod);
+        kernel.root_module.addImport(mod_name, mod);
+    }
 }

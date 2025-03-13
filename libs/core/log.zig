@@ -6,6 +6,17 @@ const StackTrace = std.builtin.StackTrace;
 const SpinLock = sync.SpinLock;
 const sbi = riscv.sbi;
 
+const Colour = struct {
+    const reset = "\x1b[0m";
+    const red = "\x1b[31m";
+    const green = "\x1b[32m";
+    const yellow = "\x1b[33m";
+    const blue = "\x1b[34m";
+    const magenta = "\x1b[35m";
+    const cyan = "\x1b[36m";
+    const white = "\x1b[37m";
+};
+
 var lock: ?SpinLock = null;
 
 const Writer = std.io.GenericWriter(void, error{}, put_str);
@@ -33,6 +44,13 @@ pub fn stdLogAdapter(
     comptime format: []const u8,
     args: anytype,
 ) void {
+    const colour = switch (level) {
+        .debug => Colour.cyan,
+        .info => Colour.green,
+        .warn => Colour.yellow,
+        .err => Colour.red,
+    };
+
     const lvlStr = switch (level) {
         .debug => "DEBUG",
         .info => "INFO",
@@ -41,5 +59,5 @@ pub fn stdLogAdapter(
     };
 
     const scopeStr = @tagName(scope);
-    println("[{s} {s}] " ++ format, .{ lvlStr, scopeStr } ++ args);
+    println(colour ++ "[{s} {s}] " ++ format ++ Colour.reset, .{ lvlStr, scopeStr } ++ args);
 }
