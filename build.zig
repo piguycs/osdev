@@ -1,61 +1,69 @@
 const std = @import("std");
 
-pub const QEMU_OPTS = .{
-    "qemu-system-riscv64", "-nographic",
-    "-machine",            "virt",
-    "-smp",                "4",
-    "-m",                  "8G",
-    "-bios",               "default",
-    "-kernel",             "zig-out/bin/kernel",
-    // serial output + console gets stored in a logfile
-    "-chardev",            "stdio,id=char0,mux=on,logfile=zig-out/serial.log,signal=on",
-    "-serial",             "chardev:char0",
-    "-mon",                "chardev=char0",
-};
-
-pub const QEMU_DBG = QEMU_OPTS ++ .{ "-s", "-S" };
+// for now, opts are read during compile time
+// I will use std.zon.parse to read them dynamically later
+const opts: struct {
+    qemuOpts: []const []const u8,
+    qemuDbgFlags: []const []const u8,
+    riscvFeatures: []const std.Target.riscv.Feature,
+} = @import("build-options.zon");
 
 pub fn build(b: *std.Build) !void {
-    const target_conf = .{
+    const target = b.standardTargetOptions(.{ .default_target = .{
         .cpu_arch = .riscv64,
         .abi = .none,
         .os_tag = .freestanding,
-    };
-
-    const target = b.standardTargetOptions(.{ .default_target = target_conf });
+        .cpu_features_add = std.Target.riscv.featureSet(opts.riscvFeatures),
+    } });
     const optimize = b.standardOptimizeOption(.{});
 
     const kernel = b.addExecutable(.{
         .name = "kernel",
-        .root_source_file = b.path("src/kernel.zig"),
+        .root_source_file = b.path("kernel/kernel.zig"),
         .target = target,
         .optimize = optimize,
         .code_model = .medium,
     });
 
-    kernel.setLinkerScriptPath(b.path("linker.ld"));
+    try addLibs(b, kernel);
+
+    kernel.setLinkerScript(b.path("linker.ld"));
     try addAllAssemblyFiles(b, kernel); // adds all files from asm/
 
     b.installArtifact(kernel);
 
-    runWithQemuCmd(b);
+    try runWithQemuCmd(b);
     objdumpCmd(b);
+    cleanCmd(b);
 }
 
-fn runWithQemuCmd(b: *std.Build) void {
-    const run_cmd = b.addSystemCommand(&QEMU_OPTS);
+fn runWithQemuCmd(b: *std.Build) !void {
+    const run_cmd = b.addSystemCommand(opts.qemuOpts);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_cmd.addArgs(args);
 
     const step = b.step("run", "Run kernel with QEMU");
-    step.dependOn(&run_cmd.step);
+    step.dependOn(panicAnalyseStep(b, &run_cmd.step));
 
-    const run_dbg_cmd = b.addSystemCommand(&QEMU_DBG);
+    const run_dbg_cmd = b.addSystemCommand(opts.qemuOpts ++ opts.qemuDbgFlags);
     run_dbg_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| run_dbg_cmd.addArgs(args);
 
     const step_dbg = b.step("run-dbg", "Run kernel with QEMU in debug mode (gdb server on :1234)");
-    step_dbg.dependOn(&run_dbg_cmd.step);
+    step_dbg.dependOn(panicAnalyseStep(b, &run_dbg_cmd.step));
+}
+
+fn panicAnalyseStep(b: *std.Build, runcmd: *std.Build.Step) *std.Build.Step {
+    const cmd = b.addSystemCommand(&.{
+        "sh", "-c",
+        \\if grep -q "PANIC: sepc=" zig-out/serial.log 2>/dev/null; then
+        \\  ADDR=$(grep "PANIC: sepc=" zig-out/serial.log | head -1 | sed -E 's/.*sepc=0x([^ ]+).*/0x\1/')
+        \\  llvm-addr2line -e zig-out/bin/kernel $ADDR
+        \\fi
+    });
+    cmd.step.dependOn(runcmd);
+
+    return &cmd.step;
 }
 
 fn objdumpCmd(b: *std.Build) void {
@@ -73,14 +81,66 @@ fn objdumpCmd(b: *std.Build) void {
 
 // Add this function to scan and add all assembly files from the asm/ directory
 fn addAllAssemblyFiles(b: *std.Build, kernel: *std.Build.Step.Compile) !void {
-    var dir = try std.fs.cwd().openDir("asm/", .{ .iterate = true });
+    const asmDir = "kernel/asm";
+
+    var dir = try std.fs.cwd().openDir(asmDir, .{ .iterate = true });
     defer dir.close();
 
     var iterator = dir.iterate();
     while (try iterator.next()) |entry| {
         if (std.mem.endsWith(u8, entry.name, ".S")) {
-            const asm_path = b.fmt("asm/{s}", .{entry.name});
+            const asm_path = b.fmt(asmDir ++ "/{s}", .{entry.name});
             kernel.addAssemblyFile(b.path(asm_path));
         }
+    }
+}
+
+fn cleanCmd(b: *std.Build) void {
+    const clean_step = b.step("clean", "Clean up");
+    clean_step.dependOn(&b.addRemoveDirTree(.{ .cwd_relative = "zig-out" }).step);
+    clean_step.dependOn(&b.addRemoveDirTree(.{ .cwd_relative = ".zig-cache" }).step);
+}
+
+fn addLibs(b: *std.Build, kernel: *std.Build.Step.Compile) !void {
+    const libDir = "libs";
+
+    var dir = try std.fs.cwd().openDir(libDir, .{ .iterate = true });
+    defer dir.close();
+
+    var modules = std.StringHashMap(*std.Build.Module).init(b.allocator);
+    defer modules.deinit();
+
+    var iterator = dir.iterate();
+    while (try iterator.next()) |entry| {
+        const path = try std.fmt.allocPrint(
+            b.allocator,
+            "{s}/{s}/{s}.zig",
+            .{ libDir, entry.name, entry.name },
+        );
+
+        const mod = b.createModule(.{
+            .root_source_file = b.path(path),
+        });
+
+        try modules.put(entry.name, mod);
+    }
+
+    // dependencies between modules
+    var it = modules.iterator();
+    while (it.next()) |entry| {
+        const mod_name = entry.key_ptr.*;
+        const mod = entry.value_ptr.*;
+
+        var deps_it = modules.iterator();
+        while (deps_it.next()) |dep_entry| {
+            const dep_name = dep_entry.key_ptr.*;
+            const dep_mod = dep_entry.value_ptr.*;
+
+            if (!std.mem.eql(u8, mod_name, dep_name)) {
+                mod.addImport(dep_name, dep_mod);
+            }
+        }
+
+        kernel.root_module.addImport(mod_name, mod);
     }
 }

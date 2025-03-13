@@ -1,11 +1,9 @@
 const riscv = @import("riscv/riscv.zig");
 const sbi = @import("riscv/sbi.zig");
-const writer = @import("utils/writer.zig");
+const core = @import("core");
 
-const panic = writer.panic;
-const println = writer.println;
-
-extern fn hang() void;
+const panic = core.log.panic;
+const println = core.log.println;
 
 const Cause = enum(u64) {
     Software = 0x8000000000000001,

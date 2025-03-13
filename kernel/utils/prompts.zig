@@ -1,11 +1,10 @@
 const sbi = @import("../riscv/sbi.zig");
-const writer = @import("writer.zig");
 const reader = @import("reader.zig");
+const core = @import("core");
 
-const print = writer.print;
-const println = writer.println;
-const printchar = writer.printchar;
-const panic = writer.panic;
+const print = core.log.print;
+const println = core.log.println;
+const panic = core.log.panic;
 
 const UTF_BACK = 0x08;
 const UTF_SPACE = 0x20;
@@ -62,7 +61,7 @@ pub fn prompt(args: Prompt) void {
                     }
 
                     if (!isLineEnd(char) and args.show_input) {
-                        printchar(char);
+                        _ = sbi.DebugConsoleExt.write(&.{char});
                     }
                 }
 
@@ -87,9 +86,9 @@ pub fn prompt(args: Prompt) void {
 }
 
 fn backspace() void {
-    printchar(UTF_BACK);
-    printchar(UTF_SPACE);
-    printchar(UTF_BACK);
+    print(&.{UTF_BACK}, .{});
+    print(&.{UTF_SPACE}, .{});
+    print(&.{UTF_BACK}, .{});
 }
 
 fn isLineEnd(char: u8) bool {
