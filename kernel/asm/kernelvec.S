@@ -6,6 +6,7 @@
 # the current stack is a kernel stack.
 # push registers, call kerneltrap().
 # when kerneltrap() returns, restore registers, return.
+.section .text
 .globl kernelvec
 .align 4
 kernelvec:

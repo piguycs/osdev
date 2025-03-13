@@ -1,10 +1,12 @@
+//! SOON TO BE DEPRACATED: use std.log then
+
 const std = @import("std");
 const sbi = @import("../riscv/sbi.zig");
 const spinlock = @import("../spinlock.zig");
 
 const SourceLocation = std.builtin.SourceLocation;
 
-var panicked = false;
+export var panicked = false;
 
 const Writer = std.io.GenericWriter(u32, error{}, put_str);
 const WriterChar = std.io.GenericWriter(u32, error{}, put_char);

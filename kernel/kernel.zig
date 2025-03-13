@@ -19,7 +19,13 @@ const panic = writer.panic;
 const prompt = prompts.prompt;
 const shell_command = shell.shell_command;
 
+const std = @import("std");
+
 const NCPU = 4;
+
+pub const std_options = std.Options{
+    .logFn = @import("core").log.stdLogAdapter,
+};
 
 extern const end: u8;
 
@@ -27,13 +33,15 @@ export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
 export fn start(hartid: u64, dtb_ptr: u64) void {
+    std.log.info("HELLO {s}", .{"WORLD"});
+
     riscv.enable_all_sie();
 
     if (fdt_header_addr == null) {
         fdt_header_addr = @ptrFromInt(dtb_ptr);
-
         if (!fdt_header_addr.?.isValid()) panic("fdt is invalid", .{}, @src());
 
+        // enable supervisor timer interrupts
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
         _ = hartid;
@@ -51,10 +59,10 @@ fn start_stuf(_: []const u8) void {
 }
 
 export fn kmain() noreturn {
-    println("\nhello from kmain\n", .{});
-
-    trap.init();
     writer.init();
+    trap.init();
+
+    println("\nhello from kmain\n", .{});
 
     println("kalloc", .{});
     var kalloc = memory.KAlloc.init();

@@ -2,23 +2,24 @@
 
 ## TODO
 
-- [x] sv39
-- [ ] lazy freelist
-- [ ] buddy allocator
-- [ ] std-compatible allocator
+- [x] Zig version 0.14.0
+Plus some other structural changes
+- [x] make core and riscv functions available as a library
+- [x] read qemu launch commands from a file
+- [ ] make use of `std.log` (DRAFT STAGES)
 
 ## Dependencies
 
-- `zig`: 0.13.0
+- `zig`: 0.14.0
 - `qemu-system-riscv64` with the virt machine
 
-Zig version 0.13 is needed. If it is not available via your package manager, I
-recommend using [zvm](https://www.zvm.app/)
+Zig version 0.14.0 is needed.
+> I recommend using [zvm](https://www.zvm.app/)
 
 ```sh
 # make sure the version is correct
 $ zig version
-0.13.0
+0.14.0
 ```
 
 ```sh
@@ -33,6 +34,11 @@ sifive_u             RISC-V Board compatible with SiFive U SDK
 spike                RISC-V Spike board (default)
 virt                 RISC-V VirtIO board
 ```
+
+## Code structure
+
+- Commonly shared code shall be placed in `libs/`
+- All assembly files must be placed in `kernel/asm/`
 
 ## Running
 

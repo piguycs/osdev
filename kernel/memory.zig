@@ -8,7 +8,7 @@ const panic = writer.panic;
 
 const PAGE_SIZE = 4096;
 // HACK: I am hardcoding these in for now
-const MEM_SIZE = 128 * 1024 * 1024; // 64M
+const MEM_SIZE = 4 * 1024 * 1024 * 1024; // 64M
 const MEM_END = 0x80200000 + MEM_SIZE;
 
 pub const FreeList = struct {
