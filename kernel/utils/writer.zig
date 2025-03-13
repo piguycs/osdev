@@ -1,10 +1,11 @@
-//! SOON TO BE DEPRACATED: use std.log then
+//! SOON TO BE DEPRACATED: use std.log and @import("core").log then
 
 const std = @import("std");
 const sbi = @import("../riscv/sbi.zig");
-const spinlock = @import("../spinlock.zig");
+const core = @import("core");
 
 const SourceLocation = std.builtin.SourceLocation;
+const SpinLock = core.sync.SpinLock;
 
 export var panicked = false;
 
@@ -24,10 +25,10 @@ fn put_char(_: u32, char: []const u8) !usize {
     return 1;
 }
 
-var writeLock: spinlock.Lock = undefined;
+var writeLock: SpinLock = undefined;
 
 pub fn init() void {
-    writeLock = spinlock.Lock.new("writer");
+    writeLock = SpinLock.new("writer");
 }
 
 pub fn print(comptime fmt: []const u8, args: anytype) void {

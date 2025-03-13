@@ -1,7 +1,9 @@
 const std = @import("std");
 const sbi = @import("../riscv/sbi.zig");
-const spinlock = @import("../spinlock.zig");
+const core = @import("core");
+
 const SourceLocation = std.builtin.SourceLocation;
+const SpinLock = core.sync.SpinLock;
 
 const Reader = std.io.GenericReader(u32, error{}, read_str);
 const sbi_reader = Reader{ .context = 0 };
@@ -11,10 +13,10 @@ fn read_str(_: u32, str: []u8) !usize {
     return bytes_read.value;
 }
 
-var readLock: spinlock.Lock = undefined;
+var readLock: SpinLock = undefined;
 
 pub fn init() void {
-    readLock = spinlock.Lock.new("reader");
+    readLock = SpinLock.new("reader");
 }
 
 // Artur: TODO: Add terminator for the input

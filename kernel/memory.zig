@@ -1,5 +1,7 @@
-const sync = @import("spinlock.zig");
+const core = @import("core");
 const writer = @import("utils/writer.zig");
+
+const SpinLock = core.sync.SpinLock;
 
 // end of the kernel code (defined in linker.ld)
 extern const end: u8;
@@ -21,12 +23,12 @@ pub const FreeList = struct {
 /// - this CAN result in fragmentation
 pub const KAlloc = struct {
     freelist: FreeList,
-    lock: sync.Lock,
+    lock: SpinLock,
 
     pub fn init() KAlloc {
         var kmem = KAlloc{
             .freelist = FreeList{ .next = null },
-            .lock = sync.Lock.new("kmem"),
+            .lock = SpinLock.new("kmem"),
         };
 
         kmem.freeRange(@intFromPtr(&end), MEM_END);

@@ -3,10 +3,11 @@ const riscv = @import("../riscv/riscv.zig");
 const sbi = @import("../riscv/sbi.zig");
 const prompts = @import("prompts.zig");
 const reader = @import("reader.zig");
-const writer = @import("writer.zig");
+//const writer = @import("writer.zig");
+const core = @import("core");
 
-const print = writer.print;
-const println = writer.println;
+const print = core.log.print;
+const println = core.log.println;
 const prompt = prompts.prompt;
 
 const ShellCommand = struct {
@@ -26,11 +27,6 @@ const shell_commands = [_]ShellCommand{
         .help = "Echo arguments back",
         .handler = cmd_echo,
     },
-    .{
-        .name = "walk",
-        .help = "fake walk a virt addr",
-        .handler = cmd_walk,
-    },
 };
 
 fn cmd_help(args: []const []const u8) void {
@@ -47,10 +43,6 @@ fn cmd_echo(args: []const []const u8) void {
         print("{s} ", .{arg});
     }
     println("", .{});
-}
-
-fn cmd_walk(_: []const []const u8) void {
-    println("output: 0x{x}", .{0});
 }
 
 pub fn shell_command(input: []const u8) void {

@@ -40,16 +40,15 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
         _ = hartid;
-        //println("info: assuming main thread for hart#{any}", .{hartid});
+        //log.debug("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        //println("info: assuming second thread for hart#{any}", .{hartid});
+        //log.debug("info: assuming second thread for hart#{any}", .{hartid});
         ksecond();
     }
 }
 
 fn start_stuf(_: []const u8) void {
-    // println("Prompt got: {s}", .{input});
     log.info("Starting...", .{});
 }
 
@@ -61,14 +60,14 @@ export fn kmain() noreturn {
 
     log.debug("kalloc", .{});
     var kalloc = memory.KAlloc.init();
-    log.debug("/kalloc", .{});
+    log.debug("done kalloc", .{});
 
     const memreq = [_]sv39.MemReq{
         .{
             .name = "KERNEL",
             .physicalAddr = 0x80200000,
             .virtualAddr = 0x80200000,
-            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000) / 4096),
+            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000)) / 4096,
         },
     };
 
@@ -76,14 +75,15 @@ export fn kmain() noreturn {
         panic("could not initialise paging: {any}", .{err}, @src());
     };
     sv39.inithart();
-    log.debug("done modafuka", .{});
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
 
-    // for (0..NCPU) |id| {
-    //     _ = sbi.HartStateManagement.hart_start(id, null);
-    // }
+    for (0..NCPU) |id| {
+        _ = sbi.HartStateManagement.hart_start(id, null);
+    }
+
+    shell.kshell();
 
     kwait();
 }
