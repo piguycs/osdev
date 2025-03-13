@@ -1,6 +1,6 @@
 pub const SpinLock = struct {
     name: []const u8, // good for debugging
-    locked: bool, // we use u32 for atomic operations
+    locked: bool,
 
     pub fn new(name: []const u8) SpinLock {
         return .{ .name = name, .locked = false };
