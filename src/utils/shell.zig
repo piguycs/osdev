@@ -26,11 +26,6 @@ const shell_commands = [_]ShellCommand{
         .help = "Echo arguments back",
         .handler = cmd_echo,
     },
-    .{
-        .name = "walk",
-        .help = "fake walk a virt addr",
-        .handler = cmd_walk,
-    },
 };
 
 fn cmd_help(args: []const []const u8) void {
@@ -47,10 +42,6 @@ fn cmd_echo(args: []const []const u8) void {
         print("{s} ", .{arg});
     }
     println("", .{});
-}
-
-fn cmd_walk(_: []const []const u8) void {
-    println("output: 0x{x}", .{0});
 }
 
 pub fn shell_command(input: []const u8) void {

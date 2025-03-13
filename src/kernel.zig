@@ -58,7 +58,7 @@ export fn kmain() noreturn {
 
     println("kalloc", .{});
     var kalloc = memory.KAlloc.init();
-    println("/kalloc", .{});
+    println("done kalloc", .{});
 
     const memreq = [_]sv39.MemReq{
         .{
@@ -73,14 +73,15 @@ export fn kmain() noreturn {
         panic("could not initialise paging: {any}", .{err}, @src());
     };
     sv39.inithart();
-    println("done modafuka", .{});
 
     const time = riscv.csrr("time");
     _ = sbi.TimeExt.set_timer(time + 10000000);
 
-    // for (0..NCPU) |id| {
-    //     _ = sbi.HartStateManagement.hart_start(id, null);
-    // }
+    for (0..NCPU) |id| {
+        _ = sbi.HartStateManagement.hart_start(id, null);
+    }
+
+    shell.kshell();
 
     kwait();
 }
