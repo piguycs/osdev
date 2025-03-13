@@ -61,7 +61,7 @@ pub fn prompt(args: Prompt) void {
                     }
 
                     if (!isLineEnd(char) and args.show_input) {
-                        print("{c}", .{char});
+                        _ = sbi.DebugConsoleExt.write(&.{char});
                     }
                 }
 
@@ -86,9 +86,9 @@ pub fn prompt(args: Prompt) void {
 }
 
 fn backspace() void {
-    print("{c}", .{UTF_BACK});
-    print("{c}", .{UTF_SPACE});
-    print("{c}", .{UTF_BACK});
+    print(&.{UTF_BACK}, .{});
+    print(&.{UTF_SPACE}, .{});
+    print(&.{UTF_BACK}, .{});
 }
 
 fn isLineEnd(char: u8) bool {
