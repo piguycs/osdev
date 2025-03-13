@@ -1,4 +1,5 @@
 const std = @import("std");
+const core = @import("core");
 
 const fdt = @import("riscv/fdt.zig");
 const riscv = @import("riscv/riscv.zig");
@@ -7,20 +8,19 @@ const sv39 = @import("riscv/sv39.zig");
 
 const prompts = @import("utils/prompts.zig");
 const reader = @import("utils/reader.zig");
-const writer = @import("utils/writer.zig");
 const shell = @import("utils/shell.zig");
 
 const memory = @import("memory.zig");
 const trap = @import("trap.zig");
 
-const panic = writer.panic;
+const panic = core.log.panic;
 const prompt = prompts.prompt;
 const shell_command = shell.shell_command;
 
 const NCPU = 4;
 
 pub const std_options = std.Options{
-    .logFn = @import("core").log.stdLogAdapter,
+    .logFn = core.log.stdLogAdapter,
 };
 const log = std.log.scoped(.kernel);
 
@@ -39,28 +39,26 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
         // enable supervisor timer interrupts
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
-        _ = hartid;
-        //log.debug("info: assuming main thread for hart#{any}", .{hartid});
+        log.debug("info: assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        //log.debug("info: assuming second thread for hart#{any}", .{hartid});
+        log.debug("info: assuming second thread for hart#{any}", .{hartid});
         ksecond();
     }
 }
 
 fn start_stuf(_: []const u8) void {
-    log.info("Starting...", .{});
+    //log.info("Starting...", .{});
 }
 
 export fn kmain() noreturn {
-    writer.init();
     trap.init();
 
-    log.info("\nhello from kmain\n", .{});
+    //log.info("\nhello from kmain\n", .{});
 
-    log.debug("kalloc", .{});
+    //log.debug("kalloc", .{});
     var kalloc = memory.KAlloc.init();
-    log.debug("done kalloc", .{});
+    //log.debug("done kalloc", .{});
 
     const memreq = [_]sv39.MemReq{
         .{

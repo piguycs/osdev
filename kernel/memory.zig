@@ -1,12 +1,11 @@
 const core = @import("core");
-const writer = @import("utils/writer.zig");
 
 const SpinLock = core.sync.SpinLock;
 
 // end of the kernel code (defined in linker.ld)
 extern const end: u8;
 
-const panic = writer.panic;
+const panic = core.log.panic;
 
 const PAGE_SIZE = 4096;
 // HACK: I am hardcoding these in for now

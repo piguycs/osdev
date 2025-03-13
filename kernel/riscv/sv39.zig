@@ -1,11 +1,10 @@
 const riscv = @import("../riscv/riscv.zig");
-const writer = @import("../utils/writer.zig");
 const memory = @import("../memory.zig");
+const core = @import("core");
 
 const KAlloc = memory.KAlloc;
-const println = writer.println;
-const panic = writer.panic;
-const ct_assert = writer.ct_assert;
+const println = core.log.println;
+const panic = core.log.panic;
 
 const PTE_V: u64 = 1 << 0;
 const PTE_R: u64 = 1 << 1;
@@ -34,7 +33,7 @@ pub fn init(kalloc: *KAlloc, memreq: []const MemReq) !void {
 
     for (memreq) |req| {
         try map(page, req.physicalAddr, req.virtualAddr, req.numPages * PAGE_SIZE);
-        println("map: physical: 0x{x}, virtual: 0x{x}, size: {any}, name: {s}", .{
+        println("map: physical: 0x{x}, virtual: 0x{x}, size: 0x{x}, name: {s}", .{
             req.physicalAddr,
             req.virtualAddr,
             req.numPages * PAGE_SIZE,

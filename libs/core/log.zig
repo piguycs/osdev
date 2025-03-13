@@ -1,10 +1,11 @@
 const std = @import("std");
 const riscv = @import("riscv");
 const sync = @import("sync.zig");
+const sbi = riscv.sbi;
 
 const StackTrace = std.builtin.StackTrace;
 const SpinLock = sync.SpinLock;
-const sbi = riscv.sbi;
+const SourceLocation = std.builtin.SourceLocation;
 
 const Colour = struct {
     const reset = "\x1b[0m";
@@ -28,14 +29,38 @@ fn put_str(_: void, str: []const u8) !usize {
 }
 
 pub fn print(comptime fmt: []const u8, args: anytype) void {
+    // we get rid of the `init` function here by simply doing this
     if (lock == null) lock = SpinLock.new("log");
+
     lock.?.acquire();
     defer lock.?.release();
+
     sbi_writer.print(fmt, args) catch {};
 }
 
 pub fn println(comptime fmt: []const u8, args: anytype) void {
     print(fmt ++ "\n", args);
+}
+
+pub fn panic(comptime fmt: []const u8, args: anytype, src: ?SourceLocation) noreturn {
+    print("PANIC: " ++ fmt, args);
+
+    if (src) |src_v| {
+        print(" [{string} {string}() {any}:{any}]\n", .{
+            src_v.file,
+            src_v.fn_name,
+            src_v.line,
+            src_v.column,
+        });
+    } else {
+        print("\n", .{});
+    }
+
+    hang();
+}
+
+export fn hang() noreturn {
+    while (true) {}
 }
 
 pub fn stdLogAdapter(

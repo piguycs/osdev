@@ -3,7 +3,6 @@ const riscv = @import("../riscv/riscv.zig");
 const sbi = @import("../riscv/sbi.zig");
 const prompts = @import("prompts.zig");
 const reader = @import("reader.zig");
-//const writer = @import("writer.zig");
 const core = @import("core");
 
 const print = core.log.print;
