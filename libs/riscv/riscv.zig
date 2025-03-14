@@ -1,6 +1,8 @@
 pub const sbi = @import("sbi.zig");
 pub const fdt = @import("fdt.zig");
 
+pub const PAGE_SIZE = 4096;
+
 // supervisor interrupt flags
 const SIE_SEIE = 1 << 9; // external
 const SIE_STIE = 1 << 5; // timer
