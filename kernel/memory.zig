@@ -45,7 +45,7 @@ pub const KAlloc = struct {
     }
 
     pub fn kfree(self: *KAlloc, phyaddr: []u8) void {
-        if (phyaddr.len != PAGE_SIZE) panic("", .{}, @src());
+        if (phyaddr.len != PAGE_SIZE) panic("kfree", .{}, @src());
 
         // we set all invalid mem addresses to 1 and all acquired ones to 0
         @memset(phyaddr, 1);

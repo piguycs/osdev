@@ -74,7 +74,7 @@ pub fn map(kpgtbl: []u64, physicalAddr: u64, virtualAddr: u64, size: u64, perms:
 }
 
 pub fn walk(kpgtbl: []u64, virtualAddr: u64) *u64 {
-    if (virtualAddr >= MAX_VADDR) panic("", .{}, @src());
+    if (virtualAddr >= MAX_VADDR) panic("walk", .{}, @src());
 
     var pagetable = kpgtbl;
 
