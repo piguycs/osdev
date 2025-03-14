@@ -6,10 +6,10 @@ const KAlloc = memory.KAlloc;
 const println = core.log.println;
 const panic = core.log.panic;
 
-const PTE_V: u64 = 1 << 0;
-const PTE_R: u64 = 1 << 1;
-const PTE_W: u64 = 1 << 2;
-const PTE_X: u64 = 1 << 3;
+pub const PTE_V: u64 = 1 << 0;
+pub const PTE_R: u64 = 1 << 1;
+pub const PTE_W: u64 = 1 << 2;
+pub const PTE_X: u64 = 1 << 3;
 
 pub const PAGE_SIZE = 4096;
 pub const MAX_VADDR = 1 << 38; // 0x4000000000
@@ -22,6 +22,7 @@ pub const MemReq = struct {
     virtualAddr: u64,
     name: ?[]const u8 = null,
     numPages: u64 = 1,
+    perms: u64 = PTE_R | PTE_W | PTE_X,
 };
 
 ///this needs to be run once on the main hart
@@ -32,7 +33,7 @@ pub fn init(kalloc: *KAlloc, memreq: []const MemReq) !void {
     @memset(page, 0);
 
     for (memreq) |req| {
-        try map(page, req.physicalAddr, req.virtualAddr, req.numPages * PAGE_SIZE);
+        try map(page, req.physicalAddr, req.virtualAddr, req.numPages * PAGE_SIZE, req.perms);
         println("map: physical: 0x{x}, virtual: 0x{x}, size: 0x{x}, name: {s}", .{
             req.physicalAddr,
             req.virtualAddr,
@@ -44,7 +45,7 @@ pub fn init(kalloc: *KAlloc, memreq: []const MemReq) !void {
     kernel_pagetable = @intFromPtr(page.ptr);
 }
 
-pub fn map(kpgtbl: []u64, physicalAddr: u64, virtualAddr: u64, size: u64) !void {
+pub fn map(kpgtbl: []u64, physicalAddr: u64, virtualAddr: u64, size: u64, perms: u64) !void {
     if (virtualAddr % PAGE_SIZE != 0)
         panic("map: virtual address not aligned", .{}, @src());
     if (size % PAGE_SIZE != 0)
@@ -56,16 +57,13 @@ pub fn map(kpgtbl: []u64, physicalAddr: u64, virtualAddr: u64, size: u64) !void 
     const last = virtualAddr + size - PAGE_SIZE;
     var pa = physicalAddr;
 
-    // Default permission flags - can be parameterized if needed
-    const perm: u64 = PTE_R | PTE_W | PTE_X;
-
     while (true) {
         const pte = walk(kpgtbl, a);
 
         if (pte.* & PTE_V != 0)
             panic("map: remap", .{}, @src());
 
-        pte.* = PA2PTE(pa) | perm | PTE_V;
+        pte.* = PA2PTE(pa) | perms | PTE_V;
 
         if (a == last)
             break;

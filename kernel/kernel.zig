@@ -24,7 +24,7 @@ pub const std_options = std.Options{
 };
 const log = std.log.scoped(.kernel);
 
-extern const end: u8;
+extern const etext: u8;
 
 export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
@@ -62,10 +62,18 @@ export fn kmain() noreturn {
 
     const memreq = [_]sv39.MemReq{
         .{
-            .name = "KERNEL",
+            .name = "KERNEL_TEXT",
             .physicalAddr = 0x80200000,
             .virtualAddr = 0x80200000,
-            .numPages = memory.pageRoundUp((@intFromPtr(&end) - 0x80200000)) / 4096,
+            .numPages = (memory.pageRoundUp(@intFromPtr(&etext)) - 0x80200000) / 4096,
+            .perms = sv39.PTE_R | sv39.PTE_X,
+        },
+        .{
+            .name = "KERNEL_DATA",
+            .physicalAddr = memory.pageRoundUp(@intFromPtr(&etext)),
+            .virtualAddr = memory.pageRoundUp(@intFromPtr(&etext)),
+            .numPages = 32000,
+            .perms = sv39.PTE_R | sv39.PTE_W,
         },
     };
 
