@@ -1,3 +1,4 @@
+const std = @import("std");
 const riscv = @import("riscv");
 const core = @import("core");
 const memory = @import("../memory.zig");
@@ -17,6 +18,8 @@ pub const MAX_VADDR = 1 << 38; // 0x4000000000
 var kernel_pagetable: u64 = undefined;
 var global: *KAlloc = undefined;
 
+const log = std.log.scoped(.sv39);
+
 pub const MemReq = struct {
     physicalAddr: u64,
     virtualAddr: u64,
@@ -34,7 +37,7 @@ pub fn init(kalloc: *KAlloc, memreq: []const MemReq) !void {
 
     for (memreq) |req| {
         try map(page, req.physicalAddr, req.virtualAddr, req.numPages * PAGE_SIZE, req.perms);
-        println("map: physical: 0x{x}, virtual: 0x{x}, size: 0x{x}, name: {s}", .{
+        log.debug("map: physical: 0x{x}, virtual: 0x{x}, size: 0x{x}, name: {s}", .{
             req.physicalAddr,
             req.virtualAddr,
             req.numPages * PAGE_SIZE,

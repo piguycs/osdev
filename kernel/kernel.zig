@@ -3,7 +3,6 @@ const core = @import("core");
 const riscv = @import("riscv");
 
 const sv39 = @import("riscv/sv39.zig");
-const shell = @import("utils/shell.zig");
 
 const memory = @import("memory.zig");
 const trap = @import("trap.zig");
@@ -35,22 +34,19 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
         // enable supervisor timer interrupts
         riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
 
-        log.debug("info: assuming main thread for hart#{any}", .{hartid});
+        log.debug("assuming main thread for hart#{any}", .{hartid});
         kmain();
     } else {
-        log.debug("info: assuming second thread for hart#{any}", .{hartid});
+        log.debug("assuming second thread for hart#{any}", .{hartid});
         ksecond();
     }
 }
 
 export fn kmain() noreturn {
+    log.info("\nhello from kmain\n", .{});
+
     trap.init();
-
-    //log.info("\nhello from kmain\n", .{});
-
-    //log.debug("kalloc", .{});
     var kalloc = memory.KAlloc.init();
-    //log.debug("done kalloc", .{});
 
     const memreq = [_]sv39.MemReq{
         .{
@@ -80,8 +76,6 @@ export fn kmain() noreturn {
     for (0..NCPU) |id| {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
-
-    shell.kshell();
 
     kwait();
 }
