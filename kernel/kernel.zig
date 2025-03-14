@@ -3,8 +3,6 @@ const core = @import("core");
 const riscv = @import("riscv");
 
 const sv39 = @import("riscv/sv39.zig");
-const prompts = @import("utils/prompts.zig");
-const reader = @import("utils/reader.zig");
 const shell = @import("utils/shell.zig");
 
 const memory = @import("memory.zig");
@@ -14,8 +12,6 @@ const fdt = riscv.fdt;
 const sbi = riscv.sbi;
 
 const panic = core.log.panic;
-const prompt = prompts.prompt;
-const shell_command = shell.shell_command;
 
 const NCPU = 4;
 
@@ -45,10 +41,6 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
         log.debug("info: assuming second thread for hart#{any}", .{hartid});
         ksecond();
     }
-}
-
-fn start_stuf(_: []const u8) void {
-    //log.info("Starting...", .{});
 }
 
 export fn kmain() noreturn {
