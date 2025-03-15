@@ -52,8 +52,8 @@ export fn kmain() noreturn {
     core.mem.linear.init();
 
     var new_alloc = core.mem.linear.allocator();
-    const chunk = new_alloc.alloc(HelloWorld, 1) catch {
-        panic("could not alloc using newalloc", .{}, @src());
+    const chunk = new_alloc.alloc(u8, 2) catch {
+        log.err("could not alloc using newalloc", .{});
         kwait();
     };
 
