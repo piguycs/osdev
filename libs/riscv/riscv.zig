@@ -21,6 +21,12 @@ pub inline fn csrw(comptime reg: []const u8, value: u64) void {
     );
 }
 
+pub inline fn cpu() u64 {
+    return asm volatile ("nop"
+        : [ret] "={tp}" (-> u64),
+    );
+}
+
 ///sets supervisor mode to handle external, timer and software interrupts
 pub inline fn enable_all_sie() void {
     csrw("sie", SIE_SEIE | SIE_STIE | SIE_SSIE);
