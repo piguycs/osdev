@@ -25,28 +25,33 @@ export var stack0: [4096 * NCPU]u8 align(16) = undefined;
 var fdt_header_addr: ?*fdt.Header = null;
 
 export fn start(hartid: u64, dtb_ptr: u64) void {
+    log.info("main hart is #{any}", .{hartid});
     riscv.enable_all_sie();
 
-    if (fdt_header_addr == null) {
-        fdt_header_addr = @ptrFromInt(dtb_ptr);
-        if (!fdt_header_addr.?.isValid()) panic("fdt is invalid", .{}, @src());
+    fdt_header_addr = @ptrFromInt(dtb_ptr);
+    if (!fdt_header_addr.?.isValid()) panic("fdt is invalid", .{}, @src());
 
-        // enable supervisor timer interrupts
-        riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
+    // enable supervisor timer interrupts
+    // riscv.csrw("sstatus", riscv.csrr("sstatus") | (1 << 1));
+    asm volatile ("csrsi sstatus, 0x2"); // 1 << 1 == 0x2
 
-        log.debug("assuming main thread for hart#{any}", .{hartid});
-        kmain();
-    } else {
-        log.debug("assuming second thread for hart#{any}", .{hartid});
-        ksecond();
-    }
+    kmain();
 }
 
 export fn kmain() noreturn {
-    log.info("\nhello from kmain\n", .{});
+    log.info("hello from kmain", .{});
 
     trap.init();
     var kalloc = memory.KAlloc.init();
+    core.mem.linear.init();
+
+    var new_alloc = core.mem.linear.allocator();
+    const chunk = new_alloc.alloc(u8, 2) catch {
+        panic("could not alloc using newalloc", .{}, @src());
+        kwait();
+    };
+
+    log.info("got chunk of size {d} at 0x{x}", .{ chunk.len, @intFromPtr(chunk.ptr) });
 
     const memreq = [_]sv39.MemReq{
         .{
