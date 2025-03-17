@@ -38,6 +38,12 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
     kmain();
 }
 
+const HelloWorld = struct {
+    helloWorld: u64,
+    two: u64,
+    others: [512]u64,
+};
+
 export fn kmain() noreturn {
     log.info("hello from kmain", .{});
 
@@ -46,12 +52,14 @@ export fn kmain() noreturn {
     core.mem.linear.init();
 
     var new_alloc = core.mem.linear.allocator();
-    const chunk = new_alloc.alloc(u8, 2) catch {
+    const chunk = new_alloc.alloc(HelloWorld, 1) catch {
         panic("could not alloc using newalloc", .{}, @src());
         kwait();
     };
 
-    log.info("got chunk of size {d} at 0x{x}", .{ chunk.len, @intFromPtr(chunk.ptr) });
+    _ = chunk;
+
+    //log.info("got chunk of size {d} at 0x{x}", .{ chunk.len, @intFromPtr(chunk.ptr) });
 
     const memreq = [_]sv39.MemReq{
         .{
