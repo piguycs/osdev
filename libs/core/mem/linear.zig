@@ -5,7 +5,7 @@ const mem = @import("mem.zig");
 const std = @import("std");
 
 // end of the kernel code (defined in linker.ld)
-extern const end: void;
+extern const end: u8;
 
 const Alignment = std.mem.Alignment;
 const Allocator = std.mem.Allocator;
@@ -22,17 +22,30 @@ var singleton: Mutex(Freelist) = undefined;
 const Freelist = struct {
     next: ?*Freelist,
 
-    pub fn expand(self: *Freelist, amount: u64) void {
-        const memStart = pageRoundUp(@intFromPtr(&end));
-        _ = memStart;
+    pub fn free(self: *Freelist, phyaddr: []u8) void {
+        if (phyaddr.len != PAGE_SIZE) log.err("kfree", .{});
 
-        _ = self;
-        for (0..amount) |_| {
-            //
+        // we set all invalid mem addresses to 1 and all acquired ones to 0
+        @memset(phyaddr, 1);
+
+        const kmem: *Freelist = @ptrCast(@alignCast(phyaddr.ptr));
+
+        kmem.next = self.next;
+        self.next = kmem;
+    }
+
+    pub fn expand(self: *Freelist, amount: u64) void {
+        var currPage = pageRoundUp(@intFromPtr(&end));
+        const rangeEnd = currPage + (amount * PAGE_SIZE);
+
+        while (currPage <= rangeEnd) : (currPage += PAGE_SIZE) {
+            const phyAddr = @as([*]u8, @ptrFromInt(currPage))[0..PAGE_SIZE];
+            self.free(phyAddr);
         }
     }
 
     pub fn nextNodeOrExpand(self: *Freelist) ?*Freelist {
+        if (self.next == null) self.expand(FREELIST_EXPAND_AMT);
         return self.next;
     }
 };
@@ -42,16 +55,40 @@ fn alloc(ptr: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*
     const freelist = mutex.aquire();
     defer mutex.release();
 
-    const node = freelist.nextNodeOrExpand() orelse {
+    const pages_needed = (len + PAGE_SIZE - 1) / PAGE_SIZE;
+
+    const first_node = freelist.nextNodeOrExpand() orelse {
         log.err("out of memory :( [ra=0x{x}]", .{ret_addr});
         return null;
     };
 
-    _ = node;
-    _ = len;
-    _ = alignment;
+    const buf_ptr = @as([*]u8, @ptrCast(@alignCast(first_node)));
 
-    return null;
+    freelist.next = first_node.next;
+
+    @memset(buf_ptr[0..PAGE_SIZE], 0);
+
+    const addr = @intFromPtr(buf_ptr);
+    if (!alignment.check(addr)) {
+        log.err(
+            "alignment check failed: addr=0x{x}, required={x}, ra=0x{x}",
+            .{ addr, alignment, ret_addr },
+        );
+
+        freelist.free(buf_ptr[0..PAGE_SIZE]);
+        return null;
+    }
+
+    if (pages_needed > 1) {
+        log.warn("more than one page allocated at 0x{x}", .{ret_addr});
+        // we already allocated the first page, so we start from 1
+        var i: usize = 1;
+        _ = &i;
+        log.err("TODO: not yet implimented more than 1 page allocs", .{});
+        return null;
+    }
+
+    return buf_ptr;
 }
 
 pub fn allocator() Allocator {
