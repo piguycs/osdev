@@ -18,7 +18,7 @@ const log = std.log.scoped(.core_mem_linear);
 const FREELIST_EXPAND_AMT = 128;
 const PAGE_SIZE = mem.PAGE_SIZE;
 
-var singleton: Mutex(Freelist) = undefined;
+var singleton: ?Mutex(Freelist) = null;
 const Freelist = struct {
     next: ?*Freelist,
 
@@ -92,8 +92,12 @@ fn alloc(ptr: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*
 }
 
 pub fn allocator() Allocator {
+    if (singleton == null) {
+        singleton = Mutex(Freelist).init(Freelist{ .next = null });
+    }
+
     return Allocator{
-        .ptr = &singleton,
+        .ptr = &singleton.?,
         .vtable = &VTable{
             // W.I.P.
             .alloc = alloc,
@@ -105,10 +109,6 @@ pub fn allocator() Allocator {
             .resize = undefined,
         },
     };
-}
-
-pub fn init() void {
-    singleton = Mutex(Freelist).init(Freelist{ .next = null });
 }
 
 pub fn deinit() void {

@@ -18,7 +18,8 @@ const Colour = struct {
     const white = "\x1b[37m";
 };
 
-var lock: ?SpinLock = null;
+// less space efficient, but a few bytes is not gonna hurt anybody
+var lock: SpinLock = SpinLock.new("log");
 
 const Writer = std.io.GenericWriter(void, error{}, put_str);
 const sbi_writer = Writer{ .context = undefined };
@@ -29,11 +30,8 @@ fn put_str(_: void, str: []const u8) !usize {
 }
 
 pub fn print(comptime fmt: []const u8, args: anytype) void {
-    // we get rid of the `init` function here by simply doing this
-    if (lock == null) lock = SpinLock.new("log");
-
-    lock.?.acquire();
-    defer lock.?.release();
+    lock.acquire();
+    defer lock.release();
 
     sbi_writer.print(fmt, args) catch {};
 }

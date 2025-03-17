@@ -3,8 +3,6 @@ const riscv = @import("riscv");
 
 const Atomic = std.atomic.Value;
 
-const panic = @import("log.zig").panic;
-
 pub fn Mutex(comptime T: type) type {
     return comptime struct {
         const Self = @This();

@@ -38,21 +38,14 @@ export fn start(hartid: u64, dtb_ptr: u64) void {
     kmain();
 }
 
-const HelloWorld = struct {
-    helloWorld: u64,
-    two: u64,
-    others: [512]u64,
-};
-
 export fn kmain() noreturn {
     log.info("hello from kmain", .{});
 
     trap.init();
     var kalloc = memory.KAlloc.init();
-    core.mem.linear.init();
 
     var new_alloc = core.mem.linear.allocator();
-    const chunk = new_alloc.alloc(u8, 2) catch {
+    const chunk = new_alloc.alloc(u8, 4096) catch {
         log.err("could not alloc using newalloc", .{});
         kwait();
     };
