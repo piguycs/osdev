@@ -16,6 +16,7 @@ const log = std.log.scoped(.core_mem_linear);
 
 ///how many pages to expand the freelist by
 const FREELIST_EXPAND_AMT = 128;
+const PAGE_SIZE = mem.PAGE_SIZE;
 
 var singleton: Mutex(Freelist) = undefined;
 const Freelist = struct {
@@ -78,7 +79,6 @@ pub fn deinit() void {
 }
 
 pub fn pageRoundUp(input: u64) u64 {
-    const PAGE_SIZE = mem.PAGE_SIZE;
     comptime if ((PAGE_SIZE & (PAGE_SIZE - 1)) != 0) {
         @compileError("PAGE_SIZE must be a power of 2");
     };
