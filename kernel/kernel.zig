@@ -50,9 +50,7 @@ export fn kmain() noreturn {
         kwait();
     };
 
-    _ = chunk;
-
-    //log.info("got chunk of size {d} at 0x{x}", .{ chunk.len, @intFromPtr(chunk.ptr) });
+    log.debug("allocated 0x{x} bytes at 0x{x}", .{ chunk.len, @intFromPtr(chunk.ptr) });
 
     const memreq = [_]sv39.MemReq{
         .{
@@ -70,6 +68,8 @@ export fn kmain() noreturn {
             .perms = sv39.PTE_R | sv39.PTE_W,
         },
     };
+
+    log.info("done mapping vmem", .{});
 
     sv39.init(&kalloc, &memreq) catch |err| {
         panic("could not initialise paging: {any}", .{err}, @src());
