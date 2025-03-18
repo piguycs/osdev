@@ -4,13 +4,13 @@ const riscv = @import("riscv");
 
 const sv39 = @import("riscv/sv39.zig");
 
-const memory = @import("memory.zig");
 const trap = @import("trap.zig");
 
 const fdt = riscv.fdt;
 const sbi = riscv.sbi;
 
 const panic = core.log.panic;
+const pageRoundUp = core.mem.pageRoundUp;
 
 const NCPU = 4;
 
@@ -42,28 +42,21 @@ export fn kmain() noreturn {
     log.info("hello from kmain", .{});
 
     trap.init();
-    var kalloc = memory.KAlloc.init();
 
-    var new_alloc = core.mem.linear.allocator();
-    const chunk = new_alloc.alloc(u8, 4096) catch {
-        log.err("could not alloc using newalloc", .{});
-        kwait();
-    };
-
-    log.debug("allocated 0x{x} bytes at 0x{x}", .{ chunk.len, @intFromPtr(chunk.ptr) });
+    const allocator = core.mem.linear.allocator();
 
     const memreq = [_]sv39.MemReq{
         .{
             .name = "KERNEL_TEXT",
             .physicalAddr = 0x80200000,
             .virtualAddr = 0x80200000,
-            .numPages = (memory.pageRoundUp(@intFromPtr(&etext)) - 0x80200000) / 4096,
+            .numPages = (pageRoundUp(@intFromPtr(&etext)) - 0x80200000) / 4096,
             .perms = sv39.PTE_R | sv39.PTE_X,
         },
         .{
             .name = "KERNEL_DATA",
-            .physicalAddr = memory.pageRoundUp(@intFromPtr(&etext)),
-            .virtualAddr = memory.pageRoundUp(@intFromPtr(&etext)),
+            .physicalAddr = pageRoundUp(@intFromPtr(&etext)),
+            .virtualAddr = pageRoundUp(@intFromPtr(&etext)),
             .numPages = 32000,
             .perms = sv39.PTE_R | sv39.PTE_W,
         },
@@ -71,7 +64,7 @@ export fn kmain() noreturn {
 
     log.info("done mapping vmem", .{});
 
-    sv39.init(&kalloc, &memreq) catch |err| {
+    sv39.init(allocator, &memreq) catch |err| {
         panic("could not initialise paging: {any}", .{err}, @src());
     };
     sv39.inithart();

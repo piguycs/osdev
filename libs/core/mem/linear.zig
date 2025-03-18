@@ -35,7 +35,7 @@ const Freelist = struct {
     }
 
     pub fn expand(self: *Freelist, amount: u64) void {
-        var currPage = pageRoundUp(@intFromPtr(&end));
+        var currPage = mem.pageRoundUp(@intFromPtr(&end));
         const rangeEnd = currPage + (amount * PAGE_SIZE);
 
         while (currPage <= rangeEnd) : (currPage += PAGE_SIZE) {
@@ -99,7 +99,6 @@ pub fn allocator() Allocator {
     return Allocator{
         .ptr = &singleton.?,
         .vtable = &VTable{
-            // W.I.P.
             .alloc = alloc,
             // not supported YET
             .free = undefined,
@@ -113,13 +112,4 @@ pub fn allocator() Allocator {
 
 pub fn deinit() void {
     log.panic("TODO", .{}, @src());
-}
-
-pub fn pageRoundUp(input: u64) u64 {
-    comptime if ((PAGE_SIZE & (PAGE_SIZE - 1)) != 0) {
-        @compileError("PAGE_SIZE must be a power of 2");
-    };
-
-    const mask: u64 = PAGE_SIZE - 1;
-    return (input + mask) & ~(mask);
 }
