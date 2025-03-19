@@ -3,7 +3,7 @@ const alloc = @import("alloc");
 const core = @import("core");
 const riscv = @import("riscv");
 
-const sv39 = @import("riscv/sv39.zig");
+const sv39 = riscv.paging.sv39;
 
 const trap = @import("trap.zig");
 
@@ -45,7 +45,6 @@ export fn kmain() noreturn {
     trap.init();
 
     const allocator = core.mem.linear.allocator();
-    _ = alloc.llalloc.allocator();
 
     const memreq = [_]sv39.MemReq{
         .{

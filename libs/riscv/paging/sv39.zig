@@ -1,6 +1,7 @@
 const std = @import("std");
-const riscv = @import("riscv");
 const core = @import("core");
+
+const riscv = @import("../riscv.zig");
 
 const println = core.log.println;
 const panic = core.log.panic;
@@ -65,8 +66,7 @@ pub fn map(allocator: Allocator, kpgtbl: []u64, physicalAddr: u64, virtualAddr: 
 
         pte.* = PA2PTE(pa) | perms | PTE_V;
 
-        if (a == last)
-            break;
+        if (a == last) break;
 
         a += PAGE_SIZE;
         pa += PAGE_SIZE;

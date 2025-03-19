@@ -1,6 +1,6 @@
 pub const sbi = @import("sbi.zig");
 pub const fdt = @import("fdt.zig");
-pub const paging = @import("paging/mod.zig");
+pub const paging = @import("paging/paging.zig");
 
 pub const PAGE_SIZE = 4096;
 
