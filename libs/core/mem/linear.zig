@@ -68,16 +68,17 @@ fn alloc(ptr: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*
 
     @memset(buf_ptr[0..PAGE_SIZE], 0);
 
-    const addr = @intFromPtr(buf_ptr);
-    if (!alignment.check(addr)) {
-        log.err(
-            "alignment check failed: addr=0x{x}, required={x}, ra=0x{x}",
-            .{ addr, alignment, ret_addr },
-        );
+    _ = alignment;
+    //const addr = @intFromPtr(buf_ptr);
+    //if (!alignment.check(addr)) {
+    //    log.err(
+    //        "alignment check failed: addr=0x{x}, required={x}, ra=0x{x}",
+    //        .{ addr, alignment, ret_addr },
+    //    );
 
-        freelist.free(buf_ptr[0..PAGE_SIZE]);
-        return null;
-    }
+    //    freelist.free(buf_ptr[0..PAGE_SIZE]);
+    //    return null;
+    //}
 
     if (pages_needed > 1) {
         log.warn("more than one page allocated at 0x{x}", .{ret_addr});
