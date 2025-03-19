@@ -1,4 +1,5 @@
 const std = @import("std");
+const alloc = @import("alloc");
 const core = @import("core");
 const riscv = @import("riscv");
 
@@ -44,6 +45,7 @@ export fn kmain() noreturn {
     trap.init();
 
     const allocator = core.mem.linear.allocator();
+    _ = alloc.llalloc.allocator();
 
     const memreq = [_]sv39.MemReq{
         .{
