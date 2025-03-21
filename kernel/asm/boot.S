@@ -10,6 +10,9 @@ _start:
     la t0, kernelvec
     csrw stvec, t0
 
+    # we store the value of hartid, so it can be retrieved later
+    mv tp, a0
+
     # when we call start, two parameters are passed
     # - a0: hartid - set by OpenSBI
     # - a1: fdt header ptr - set by OpenSBI (might be useful later)

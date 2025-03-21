@@ -6,10 +6,11 @@ SECTIONS {
     /* OpenSBI does not load our kernel on any value below this */
     . = 0x80200000;
 
-    /* .text.init is the first section */
+    /* .text.boot is the first section */
     .text : {
         KEEP(*(.text.boot));
         *(.text .text.*);
+        PROVIDE(etext = .);
     }
 
     .rodata : ALIGN(16) {

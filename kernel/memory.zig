@@ -1,14 +1,15 @@
-const sync = @import("spinlock.zig");
-const writer = @import("utils/writer.zig");
+const core = @import("core");
+
+const SpinLock = core.sync.SpinLock;
 
 // end of the kernel code (defined in linker.ld)
 extern const end: u8;
 
-const panic = writer.panic;
+const panic = core.log.panic;
 
 const PAGE_SIZE = 4096;
 // HACK: I am hardcoding these in for now
-const MEM_SIZE = 128 * 1024 * 1024; // 64M
+const MEM_SIZE = 64 * 1024 * 1024; // 64M
 const MEM_END = 0x80200000 + MEM_SIZE;
 
 pub const FreeList = struct {
@@ -21,12 +22,12 @@ pub const FreeList = struct {
 /// - this CAN result in fragmentation
 pub const KAlloc = struct {
     freelist: FreeList,
-    lock: sync.Lock,
+    lock: SpinLock,
 
     pub fn init() KAlloc {
         var kmem = KAlloc{
             .freelist = FreeList{ .next = null },
-            .lock = sync.Lock.new("kmem"),
+            .lock = SpinLock.new("kmem"),
         };
 
         kmem.freeRange(@intFromPtr(&end), MEM_END);
@@ -44,7 +45,7 @@ pub const KAlloc = struct {
     }
 
     pub fn kfree(self: *KAlloc, phyaddr: []u8) void {
-        if (phyaddr.len != PAGE_SIZE) panic("", .{}, @src());
+        if (phyaddr.len != PAGE_SIZE) panic("kfree", .{}, @src());
 
         // we set all invalid mem addresses to 1 and all acquired ones to 0
         @memset(phyaddr, 1);
