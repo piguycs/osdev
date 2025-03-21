@@ -5,6 +5,7 @@ const riscv = @import("riscv");
 
 const sv39 = riscv.paging.sv39;
 
+const ushell = @import("ushell.zig");
 const trap = @import("trap.zig");
 
 const fdt = riscv.fdt;
@@ -52,14 +53,14 @@ export fn kmain() noreturn {
             .physicalAddr = 0x80200000,
             .virtualAddr = 0x80200000,
             .numPages = (pageRoundUp(@intFromPtr(&etext)) - 0x80200000) / 4096,
-            .perms = sv39.PTE_R | sv39.PTE_X,
+            .perms = sv39.PTE_R | sv39.PTE_X | sv39.PTE_U,
         },
         .{
             .name = "KERNEL_DATA",
             .physicalAddr = pageRoundUp(@intFromPtr(&etext)),
             .virtualAddr = pageRoundUp(@intFromPtr(&etext)),
             .numPages = 32000,
-            .perms = sv39.PTE_R | sv39.PTE_W,
+            .perms = sv39.PTE_R | sv39.PTE_W | sv39.PTE_U,
         },
     };
 
@@ -76,6 +77,18 @@ export fn kmain() noreturn {
     for (0..NCPU) |id| {
         _ = sbi.HartStateManagement.hart_start(id, null);
     }
+
+    const ushell_ptr = @intFromPtr(&ushell.ushell);
+    asm volatile (
+        \\csrw  sepc, %[ptr]
+        \\csrr  t0, sstatus
+        \\li    t1, ~(1 << 8)
+        \\and   t0, t0, t1
+        \\csrw  sstatus, t0
+        \\sret
+        :
+        : [ptr] "r" (ushell_ptr),
+    );
 
     kwait();
 }

@@ -10,6 +10,7 @@ pub const PTE_V: u64 = 1 << 0;
 pub const PTE_R: u64 = 1 << 1;
 pub const PTE_W: u64 = 1 << 2;
 pub const PTE_X: u64 = 1 << 3;
+pub const PTE_U: u64 = 1 << 4;
 
 pub const PAGE_SIZE = 4096;
 pub const MAX_VADDR = 1 << 38; // 0x4000000000
