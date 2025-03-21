@@ -92,6 +92,19 @@ fn alloc(ptr: *anyopaque, len: usize, alignment: Alignment, ret_addr: usize) ?[*
     return buf_ptr;
 }
 
+fn free(ptr: *anyopaque, buf: []u8, _: Alignment, ret_addr: usize) void {
+    const mutex: *Mutex(Freelist) = @ptrCast(@alignCast(ptr));
+    const freelist = mutex.aquire();
+    defer mutex.release();
+
+    if (buf.len != PAGE_SIZE) {
+        log.err("Cannot free non-page-sized allocation of {d} bytes [ra=0x{x}]", .{ buf.len, ret_addr });
+        return;
+    }
+
+    freelist.free(buf);
+}
+
 pub fn allocator() Allocator {
     if (singleton == null) {
         singleton = Mutex(Freelist).init(Freelist{ .next = null });
@@ -101,8 +114,7 @@ pub fn allocator() Allocator {
         .ptr = &singleton.?,
         .vtable = &VTable{
             .alloc = alloc,
-            // not supported YET
-            .free = undefined,
+            .free = free,
             // not supported
             .remap = undefined,
             // not supported
