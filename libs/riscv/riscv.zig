@@ -1,5 +1,10 @@
+pub const sbi = @import("sbi.zig");
+pub const fdt = @import("fdt.zig");
+pub const paging = @import("paging/paging.zig");
+
+pub const PAGE_SIZE = 4096;
+
 // supervisor interrupt flags
-// documentation for these values is on section 10.1 of risc-v priv isa pdf
 const SIE_SEIE = 1 << 9; // external
 const SIE_STIE = 1 << 5; // timer
 const SIE_SSIE = 1 << 1; // software
@@ -17,6 +22,12 @@ pub inline fn csrw(comptime reg: []const u8, value: u64) void {
     );
 }
 
+pub inline fn cpu() u64 {
+    return asm volatile ("nop"
+        : [ret] "={tp}" (-> u64),
+    );
+}
+
 ///sets supervisor mode to handle external, timer and software interrupts
 pub inline fn enable_all_sie() void {
     csrw("sie", SIE_SEIE | SIE_STIE | SIE_SSIE);
@@ -30,7 +41,6 @@ pub const Mode = enum(u64) {
     Sv39 = 8,
 };
 
-const SATP_MODE_SV39 = 8;
 const SATP_MODE_SHIFT = 60;
 const PAGE_SHIFT = 12;
 

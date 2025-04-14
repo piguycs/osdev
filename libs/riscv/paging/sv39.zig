@@ -1,40 +1,41 @@
-const riscv = @import("../riscv/riscv.zig");
-const writer = @import("../utils/writer.zig");
-const memory = @import("../memory.zig");
+const std = @import("std");
+const core = @import("core");
 
-const KAlloc = memory.KAlloc;
-const println = writer.println;
-const panic = writer.panic;
-const ct_assert = writer.ct_assert;
+const riscv = @import("../riscv.zig");
 
-const PTE_V: u64 = 1 << 0;
-const PTE_R: u64 = 1 << 1;
-const PTE_W: u64 = 1 << 2;
-const PTE_X: u64 = 1 << 3;
+const println = core.log.println;
+const panic = core.log.panic;
+
+pub const PTE_V: u64 = 1 << 0;
+pub const PTE_R: u64 = 1 << 1;
+pub const PTE_W: u64 = 1 << 2;
+pub const PTE_X: u64 = 1 << 3;
 
 pub const PAGE_SIZE = 4096;
 pub const MAX_VADDR = 1 << 38; // 0x4000000000
 
+const Allocator = std.mem.Allocator;
+
 var kernel_pagetable: u64 = undefined;
-var global: *KAlloc = undefined;
+
+const log = std.log.scoped(.sv39);
 
 pub const MemReq = struct {
     physicalAddr: u64,
     virtualAddr: u64,
     name: ?[]const u8 = null,
     numPages: u64 = 1,
+    perms: u64 = PTE_R | PTE_W | PTE_X,
 };
 
 ///this needs to be run once on the main hart
-pub fn init(kalloc: *KAlloc, memreq: []const MemReq) !void {
-    global = kalloc;
-
-    const page = kalloc.allocT(u64);
+pub fn init(allocator: Allocator, memreq: []const MemReq) !void {
+    const page = try allocator.alloc(u64, 512);
     @memset(page, 0);
 
     for (memreq) |req| {
-        try map(page, req.physicalAddr, req.virtualAddr, req.numPages * PAGE_SIZE);
-        println("map: physical: 0x{x}, virtual: 0x{x}, size: {any}, name: {s}", .{
+        try map(allocator, page, req.physicalAddr, req.virtualAddr, req.numPages * PAGE_SIZE, req.perms);
+        log.debug("map: physical: 0x{x}, virtual: 0x{x}, size: 0x{x}, name: {s}", .{
             req.physicalAddr,
             req.virtualAddr,
             req.numPages * PAGE_SIZE,
@@ -45,7 +46,7 @@ pub fn init(kalloc: *KAlloc, memreq: []const MemReq) !void {
     kernel_pagetable = @intFromPtr(page.ptr);
 }
 
-pub fn map(kpgtbl: []u64, physicalAddr: u64, virtualAddr: u64, size: u64) !void {
+pub fn map(allocator: Allocator, kpgtbl: []u64, physicalAddr: u64, virtualAddr: u64, size: u64, perms: u64) !void {
     if (virtualAddr % PAGE_SIZE != 0)
         panic("map: virtual address not aligned", .{}, @src());
     if (size % PAGE_SIZE != 0)
@@ -57,27 +58,23 @@ pub fn map(kpgtbl: []u64, physicalAddr: u64, virtualAddr: u64, size: u64) !void 
     const last = virtualAddr + size - PAGE_SIZE;
     var pa = physicalAddr;
 
-    // Default permission flags - can be parameterized if needed
-    const perm: u64 = PTE_R | PTE_W | PTE_X;
-
     while (true) {
-        const pte = walk(kpgtbl, a);
+        const pte = walk(allocator, kpgtbl, a);
 
         if (pte.* & PTE_V != 0)
             panic("map: remap", .{}, @src());
 
-        pte.* = PA2PTE(pa) | perm | PTE_V;
+        pte.* = PA2PTE(pa) | perms | PTE_V;
 
-        if (a == last)
-            break;
+        if (a == last) break;
 
         a += PAGE_SIZE;
         pa += PAGE_SIZE;
     }
 }
 
-pub fn walk(kpgtbl: []u64, virtualAddr: u64) *u64 {
-    if (virtualAddr >= MAX_VADDR) panic("", .{}, @src());
+pub fn walk(allocator: Allocator, kpgtbl: []u64, virtualAddr: u64) *u64 {
+    if (virtualAddr >= MAX_VADDR) panic("walk", .{}, @src());
 
     var pagetable = kpgtbl;
 
@@ -89,7 +86,9 @@ pub fn walk(kpgtbl: []u64, virtualAddr: u64) *u64 {
         if (pte.* & PTE_V != 0) {
             pagetable = @as([*]u64, @ptrFromInt(PTE2PA(pte.*)))[0..512];
         } else {
-            pagetable = global.allocT(u64);
+            pagetable = allocator.alloc(u64, 512) catch |err| {
+                panic("could not alloc {any}", .{err}, @src());
+            };
             @memset(pagetable, 0);
             pte.* = PA2PTE(@intFromPtr(pagetable.ptr)) | PTE_V;
         }
